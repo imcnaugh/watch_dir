@@ -1,0 +1,8 @@
+[package]
+name = "ed_log_scraper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+notify = "8.2.0"
+serde_json = "1.0.149"
