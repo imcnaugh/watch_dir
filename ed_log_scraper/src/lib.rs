@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use notify::event::DataChange;
 use notify::event::ModifyKind::Data;
 use notify::{Event, EventKind, RecursiveMode, Result, Watcher};
@@ -12,13 +13,18 @@ pub fn watch_folder(folder: String) {
         .watch(Path::new(&folder), RecursiveMode::NonRecursive)
         .unwrap();
 
+    let mut file_and_offset: HashMap<&PathBuf, usize> = HashMap::new();
+
     for event in rx {
         match event {
             Ok(evt) => {
                 if let EventKind::Modify(Data(dat)) = evt.kind
                     && dat == DataChange::Content
                 {
-                    get_new_content_from_file(&evt.paths[0]);
+                    evt.paths.iter().for_each(|path| {
+                        let offset = file_and_offset.get(&path).unwrap_or(&0);
+                        get_new_content_from_file(&path, *offset);
+                    })
                 }
             }
             Err(e) => println!("watch error: {:?}", e),
@@ -26,6 +32,6 @@ pub fn watch_folder(folder: String) {
     }
 }
 
-fn get_new_content_from_file(path: &PathBuf) -> String {
+fn get_new_content_from_file(path: &PathBuf, offset: usize) -> String {
     std::fs::read_to_string(path).unwrap()
 }
