@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use notify::event::DataChange;
 use notify::event::ModifyKind::Data;
 use notify::{Event, EventKind, RecursiveMode, Result, Watcher};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
