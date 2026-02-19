@@ -31,14 +31,14 @@ flowchart
         direction TB
         
         j_reader(( ))
-        file_watcher["File Watcher"]
+        folder_watcher["Folder Watcher"]
         file_reader["File Reader
         
         Holds a buffer of each file, when a new line is found
         empty the buffer to that point and send that line to the line parser"]
         line_parser["Line Parser"]
-        
-        file_watcher -->|PathBuff To Updated File| file_reader
+
+        folder_watcher -->|PathBuff To Updated File| file_reader
         file_reader --> |Line, and originating file|line_parser
     end
     
@@ -53,7 +53,7 @@ flowchart
     ed_log_writer --> shipyard_journal
     ed_log_writer --> status_journal
 
-    file_watcher -->|Watch files for updates| j_reader
+    folder_watcher -->|Watch files for updates| j_reader
     j_reader --> market_journal
     j_reader --> outfitting_journal
     j_reader --> shipyard_journal
