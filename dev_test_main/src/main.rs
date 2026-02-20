@@ -4,11 +4,10 @@ use std::path::PathBuf;
 
 fn main() {
     let path = PathBuf::from(".");
-    let extensions = HashSet::from(["log".to_string()]);
-    let handler = ed_log_scraper::folder_watcher::watch_folder_for_updates(&path, extensions);
-    let rx = handler.get_receiver();
+    let extensions = HashSet::from(["json".to_string()]);
+    let folder_watch_handler = ed_log_scraper::folder_watcher::watch_folder_for_updates(&path, extensions);
 
-    for e in rx {
+    for e in folder_watch_handler.get_receiver() {
         println!("{:?}", e);
     }
 }
