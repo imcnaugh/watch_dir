@@ -1,66 +1,71 @@
 # Elite-Dangerous-Journal-Reader
 
-The basic high level idea is to have a watcher keep an eye on journal files that the game writes to. Each time a file is
-updated, we should send that file name to the reader. The reader will keep an index of the last byte read from each file,
-as well as a buffer of text, when a file is updated the reader will read to the end of the file from the last byte read,
-append that to the buffer, and if a new line is found, it will removed everything before that line and send it to the
-line parser.
+On startup, the file reader scans the journal folder and records the current size of each file as
+its initial read offset — this ensures only new content is processed, not data that already existed.
 
-The line will then parse the json log into a a strongly typed object and will place it on a queue for processing.
+The folder watcher then monitors for filesystem changes. Each time a file is modified, it sends
+that file's path to the file reader. The reader seeks to its stored offset for that file, reads to
+EOF, and appends the new bytes to a per-file line buffer. When a complete line (terminated by `\n`)
+is found, everything up to and including the newline is drained from the buffer and forwarded to the
+line parser. The remaining bytes stay in the buffer until the next newline arrives. The offset is
+updated to the new end of the file after each read.
+
+Files that appear after startup are handled naturally — when the watcher fires for an unknown path,
+the reader treats it as offset 0 and starts from the beginning.
+
+The line parser deserializes each JSON line into a strongly-typed event and forwards it downstream
+for processing.
 
 ## High Level Architecture
 ```mermaid
 ---
 title: High Level Architecture
 ---
-flowchart 
-    subgraph A["Elite Dangerous, the game"]
-        direction LR
-        ed_log_writer["Elite Dangerous Journal Writer"]
+flowchart TB
+    subgraph A["Elite Dangerous"]
+        ed_log_writer["Journal Writer"]
     end
 
     subgraph B["Journal Folder"]
-        direction LR
-        market_journal[Market.json]
-        outfitting_journal[Outfitting.json]
-        shipyard_journal[Shipyard.json]
-        status_journal[Status.json]
+        journal_files[("*.json files")]
     end
 
     subgraph C["Log Reader"]
         direction TB
-        
-        j_reader(( ))
+
         folder_watcher["Folder Watcher"]
+
         file_reader["File Reader
-        
-        Holds a buffer of each file, when a new line is found
-        empty the buffer to that point and send that line to the line parser"]
-        line_parser["Line Parser"]
 
-        folder_watcher -->|PathBuff To Updated File| file_reader
-        file_reader --> |Line, and originating file|line_parser
-    end
-    
-    subgraph D["The Unknown"]
-        direction TB
-        
-        your_service
-    end
-    
-    ed_log_writer --> market_journal
-    ed_log_writer --> outfitting_journal
-    ed_log_writer --> shipyard_journal
-    ed_log_writer --> status_journal
+        Maintains a per-file offset and line buffer.
+        On update: seek to offset, read to EOF,
+        append to buffer, drain complete lines,
+        update offset."]
 
-    folder_watcher -->|Watch files for updates| j_reader
-    j_reader --> market_journal
-    j_reader --> outfitting_journal
-    j_reader --> shipyard_journal
-    j_reader --> status_journal
-    
-    line_parser --> your_service
+        line_parser["Line Parser
+
+        Deserializes each JSON line into a
+        strongly-typed journal event."]
+
+        folder_watcher -->|"PathBuf (changed file)"| file_reader
+        file_reader -->|"(PathBuf, line)"| line_parser
+    end
+
+    subgraph D["Downstream"]
+        your_service["Your Service"]
+    end
+
+    ed_log_writer -->|writes| journal_files
+
+    journal_files -.->|"startup: scan dir
+    offset = current file size"| file_reader
+
+    journal_files -->|"fs change events"| folder_watcher
+
+    line_parser -->|"typed journal events"| your_service
 ```
 
 ## TODO
-Read up on Rust's mpsc
+- [ ] Implement `FileReader`: startup directory scan, per-file offset + buffer, line extraction
+- [ ] Implement `LineParser`: serde_json deserialization into typed event enums
+- [ ] Wire together in `lib.rs`: init reader → start watcher → spawn processing thread
