@@ -8,19 +8,12 @@ use std::sync::mpsc::Receiver;
 
 pub struct FolderWatchHandle {
     _watcher: notify::RecommendedWatcher,
-    rx: Receiver<PathBuf>,
-}
-
-impl FolderWatchHandle {
-    pub fn get_receiver(&self) -> &Receiver<PathBuf> {
-        &self.rx
-    }
 }
 
 pub fn watch_folder_for_updates(
     path: &PathBuf,
     extensions_to_watch: HashSet<String>,
-) -> FolderWatchHandle {
+) -> (FolderWatchHandle, Receiver<PathBuf>) {
     let (notify_tx, notify_rx) = mpsc::channel::<notify::Result<Event>>();
     let (tx, rx) = mpsc::channel::<PathBuf>();
 
@@ -51,8 +44,5 @@ pub fn watch_folder_for_updates(
         }
     });
 
-    FolderWatchHandle {
-        _watcher: watcher,
-        rx,
-    }
+    (FolderWatchHandle { _watcher: watcher }, rx)
 }
