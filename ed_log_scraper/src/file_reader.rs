@@ -1,5 +1,7 @@
 use crate::folder_watcher::FolderWatcher;
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::mpsc;
 
@@ -36,7 +38,7 @@ impl FileReader {
 
         let (tx, rx) = mpsc::channel::<String>();
 
-        std::thread::spawn(move || Self::run(watcher_rx, tx, offsets));
+        std::thread::spawn(move || Self::run(watcher_rx, tx, offsets, HashMap::new()));
 
         Ok(Self {
             rx: Some(rx),
@@ -51,17 +53,33 @@ impl FileReader {
     fn run(
         watcher_rx: mpsc::Receiver<PathBuf>,
         tx: mpsc::Sender<String>,
-        offsets: HashMap<PathBuf, u64>,
+        mut journal_offsets: HashMap<PathBuf, u64>,
+        mut journal_file_buffer: HashMap<PathBuf, String>,
     ) {
         for event in watcher_rx {
-            let as_string = event.to_str().unwrap().to_string();
-            let _ = tx.send(as_string);
+            let result: std::io::Result<()> = (|| {
+                let offset = journal_offsets.get(&event).unwrap_or(&0);
+                let mut f = File::open(&event)?;
+
+                // this is wrong, only files that start with Journal should be read from the tail
+                // other files should be read from the beginning.c
+                f.seek(SeekFrom::Start(*offset))?;
+                let mut buf = Vec::new();
+                f.read_to_end(&mut buf)?;
+
+                let new_offset = offset + buf.len() as u64;
+                journal_offsets.insert(event.clone(), new_offset);
+                println!("{:?}", new_offset);
+
+                let _ = tx.send(String::from_utf8_lossy(&buf).to_string());
+
+                Ok(())
+            })();
         }
     }
 }
 
 /*
-
 fn read_last_10_percent(path: &std::path::Path) -> io::Result<Vec<u8>> {
     let mut f = File::open(path)?;
     let len = f.metadata()?.len(); // bytes
@@ -74,23 +92,3 @@ fn read_last_10_percent(path: &std::path::Path) -> io::Result<Vec<u8>> {
     Ok(buf)
 }
  */
-
-#[cfg(test)]
-mod tests {
-    use crate::file_reader::FileReader;
-    use std::path::PathBuf;
-
-    #[test]
-    fn it_works() {
-        let path = PathBuf::from("./src");
-        FileReader::new(&path).unwrap();
-    }
-
-    #[test]
-    fn it_works_too() {
-        let mut reader = FileReader::new(&PathBuf::from("./src")).unwrap();
-        for e in reader.take_receiver().unwrap() {
-            println!("{}", e);
-        }
-    }
-}
