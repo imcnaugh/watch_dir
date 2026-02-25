@@ -37,10 +37,9 @@ flowchart TB
 
         file_reader["File Reader
 
-        Maintains a per-file offset and line buffer.
-        On update: seek to offset, read to EOF,
-        append to buffer, drain complete lines,
-        update offset."]
+        Applies a per-file read strategy (tail or replace).
+        Tail: seek to offset, read to EOF, drain complete lines.
+        Replace: read whole file, attempt parse, discard if invalid."]
 
         line_parser["Line Parser
 
