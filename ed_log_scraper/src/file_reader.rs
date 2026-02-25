@@ -81,7 +81,7 @@ impl FileReader {
     ) {
         for event in watcher_rx {
             let result: std::io::Result<()> = (|| {
-                let content: String = match read_strategy_selector(&event) {
+                let content: Vec<String> = match read_strategy_selector(&event) {
                     ReadStrategy::Tail => Self::tail_strategy(&mut journal_offsets, event)?,
                     ReadStrategy::TailLines => Self::tail_lines_strategy(
                         &mut journal_offsets,
@@ -91,7 +91,9 @@ impl FileReader {
                     ReadStrategy::Replace => Self::replace_strategy(event)?,
                 };
 
-                let _ = tx.send(content);
+                for content in content {
+                    let _ = tx.send(content);
+                }
 
                 Ok(())
             })();
@@ -101,7 +103,7 @@ impl FileReader {
     fn tail_strategy(
         journal_offsets: &mut HashMap<PathBuf, u64>,
         event: PathBuf,
-    ) -> Result<String, Error> {
+    ) -> Result<Vec<String>, Error> {
         let offset = journal_offsets.get(&event).unwrap_or(&0);
 
         let mut f = File::open(&event)?;
@@ -110,22 +112,22 @@ impl FileReader {
         f.read_to_end(&mut buf)?;
 
         let new_offset = offset + buf.len() as u64;
-        journal_offsets.insert(event.clone(), new_offset);
-        Ok(String::from_utf8_lossy(&buf).to_string())
+        journal_offsets.insert(event, new_offset);
+        Ok(vec![String::from_utf8_lossy(&buf).to_string()])
     }
 
     fn tail_lines_strategy(
         journal_offsets: &mut HashMap<PathBuf, u64>,
         journal_file_buffer: &mut HashMap<PathBuf, String>,
         event: PathBuf,
-    ) -> Result<String, Error> {
+    ) -> Result<Vec<String>, Error> {
         todo!()
     }
 
-    fn replace_strategy(event: PathBuf) -> Result<String, Error> {
+    fn replace_strategy(event: PathBuf) -> Result<Vec<String>, Error> {
         let mut f = File::open(&event)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        Ok(String::from_utf8_lossy(&buf).to_string())
+        Ok(vec![String::from_utf8_lossy(&buf).to_string()])
     }
 }
