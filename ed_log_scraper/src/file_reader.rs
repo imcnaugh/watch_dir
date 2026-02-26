@@ -15,6 +15,7 @@ pub enum ReadStrategy {
     Tail,      // emit whatever new bytes arrive
     TailLines, // buffer until newline, emit complete lines only
     Replace,   // read the whole file on each change
+    Ignore,    // ignore the file
 }
 
 pub const REPLACE_STRATEGY: fn(&PathBuf) -> ReadStrategy = |_| ReadStrategy::Replace;
@@ -89,6 +90,7 @@ impl FileReader {
                         event,
                     )?,
                     ReadStrategy::Replace => Self::replace_strategy(event)?,
+                    ReadStrategy::Ignore => Vec::new(),
                 };
 
                 for content in content {
