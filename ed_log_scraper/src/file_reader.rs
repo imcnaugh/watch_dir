@@ -32,12 +32,15 @@ impl FileReader {
             .map(|entry| entry.path())
             .filter(|path| path.is_file())
             .map(|path| {
+                let path = path.canonicalize()?;
                 let f = std::fs::File::open(&path)?;
                 let len = f.metadata()?.len();
                 Ok::<(PathBuf, u64), std::io::Error>((path, len))
             })
             .flatten()
             .collect::<HashMap<PathBuf, u64>>();
+
+        println!("offsets: {offsets:?}");
 
         let extensions = offsets
             .keys()
@@ -81,55 +84,76 @@ impl FileReader {
         read_strategy_selector: impl Fn(&PathBuf) -> ReadStrategy + Send + 'static,
     ) {
         for event in watcher_rx {
-            let result: std::io::Result<()> = (|| {
-                let content: Vec<String> = match read_strategy_selector(&event) {
-                    ReadStrategy::Tail => Self::tail_strategy(&mut journal_offsets, event)?,
-                    ReadStrategy::TailLines => Self::tail_lines_strategy(
-                        &mut journal_offsets,
-                        &mut journal_file_buffer,
-                        event,
-                    )?,
-                    ReadStrategy::Replace => Self::replace_strategy(event)?,
-                    ReadStrategy::Ignore => Vec::new(),
-                };
-
-                for content in content {
-                    let _ = tx.send(content);
-                }
-
-                Ok(())
-            })();
+            if let Err(e) = match read_strategy_selector(&event) {
+                ReadStrategy::Tail => Self::tail_strategy(&mut journal_offsets, event, &tx),
+                ReadStrategy::TailLines => Self::tail_lines_strategy(
+                    &mut journal_offsets,
+                    &mut journal_file_buffer,
+                    event,
+                    &tx,
+                ),
+                ReadStrategy::Replace => Self::replace_strategy(event, &tx),
+                ReadStrategy::Ignore => Ok(()),
+            } {
+                eprintln!("error processing file event: {e}");
+            }
         }
+    }
+
+    fn read_tail(
+        journal_offsets: &mut HashMap<PathBuf, u64>,
+        event: &PathBuf,
+    ) -> Result<String, Error> {
+        let offset = journal_offsets.get(event).unwrap_or(&0);
+        println!("offset: {offset}");
+        println!("event: {event:?}");
+
+        let mut f = File::open(event)?;
+        let current_file_length = f.metadata()?.len();
+        f.seek(SeekFrom::Start(*offset))?;
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf)?;
+
+        journal_offsets.insert(event.clone(), current_file_length);
+        Ok(String::from_utf8_lossy(&buf).to_string())
     }
 
     fn tail_strategy(
         journal_offsets: &mut HashMap<PathBuf, u64>,
         event: PathBuf,
-    ) -> Result<Vec<String>, Error> {
-        let offset = journal_offsets.get(&event).unwrap_or(&0);
-
-        let mut f = File::open(&event)?;
-        f.seek(SeekFrom::Start(*offset))?;
-        let mut buf = Vec::new();
-        f.read_to_end(&mut buf)?;
-
-        let new_offset = offset + buf.len() as u64;
-        journal_offsets.insert(event, new_offset);
-        Ok(vec![String::from_utf8_lossy(&buf).to_string()])
+        tx: &Sender<String>,
+    ) -> Result<(), Error> {
+        let _ = tx.send(Self::read_tail(journal_offsets, &event)?);
+        Ok(())
     }
 
     fn tail_lines_strategy(
         journal_offsets: &mut HashMap<PathBuf, u64>,
         journal_file_buffer: &mut HashMap<PathBuf, String>,
         event: PathBuf,
-    ) -> Result<Vec<String>, Error> {
-        todo!()
+        tx: &Sender<String>,
+    ) -> Result<(), Error> {
+        let new_content = Self::read_tail(journal_offsets, &event)?;
+
+        let buf = journal_file_buffer.entry(event).or_insert_with(String::new);
+        buf.push_str(&new_content);
+
+        while let Some(pos) = buf.find('\n') {
+            let line = buf.drain(..=pos).collect::<String>();
+            let line = line.trim_end_matches('\n').to_string();
+            if !line.is_empty() {
+                let _ = tx.send(line);
+            }
+        }
+
+        Ok(())
     }
 
-    fn replace_strategy(event: PathBuf) -> Result<Vec<String>, Error> {
+    fn replace_strategy(event: PathBuf, tx: &Sender<String>) -> Result<(), Error> {
         let mut f = File::open(&event)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        Ok(vec![String::from_utf8_lossy(&buf).to_string()])
+        let _ = tx.send(String::from_utf8_lossy(&buf).to_string());
+        Ok(())
     }
 }
