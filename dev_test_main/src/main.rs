@@ -1,5 +1,4 @@
-use ed_log_scraper;
-use ed_log_scraper::file_reader::{REPLACE_STRATEGY, TAIL_LINES_STRATEGY, TAIL_STRATEGY};
+use ed_log_scraper::file_reader::TAIL_LINES_STRATEGY;
 use std::collections::HashSet;
 use std::path::PathBuf;
 

@@ -8,7 +8,7 @@ use std::sync::mpsc::Sender;
 
 pub struct FileReader {
     rx: Option<mpsc::Receiver<String>>,
-    folder_watcher: FolderWatcher,
+    _folder_watcher: FolderWatcher,
 }
 
 pub enum ReadStrategy {
@@ -26,21 +26,18 @@ impl FileReader {
     pub fn new(
         path: &PathBuf,
         read_strategy_selector: impl Fn(&PathBuf) -> ReadStrategy + Send + 'static,
-    ) -> Result<Self, std::io::Error> {
+    ) -> Result<Self, Error> {
         let offsets = std::fs::read_dir(path)?
             .flatten()
             .map(|entry| entry.path())
             .filter(|path| path.is_file())
-            .map(|path| {
+            .flat_map(|path| {
                 let path = path.canonicalize()?;
-                let f = std::fs::File::open(&path)?;
+                let f = File::open(&path)?;
                 let len = f.metadata()?.len();
-                Ok::<(PathBuf, u64), std::io::Error>((path, len))
+                Ok::<(PathBuf, u64), Error>((path, len))
             })
-            .flatten()
             .collect::<HashMap<PathBuf, u64>>();
-
-        println!("offsets: {offsets:?}");
 
         let extensions = offsets
             .keys()
@@ -68,7 +65,7 @@ impl FileReader {
 
         Ok(Self {
             rx: Some(rx),
-            folder_watcher,
+            _folder_watcher: folder_watcher,
         })
     }
 
@@ -105,8 +102,6 @@ impl FileReader {
         event: &PathBuf,
     ) -> Result<String, Error> {
         let offset = journal_offsets.get(event).unwrap_or(&0);
-        println!("offset: {offset}");
-        println!("event: {event:?}");
 
         let mut f = File::open(event)?;
         let current_file_length = f.metadata()?.len();
@@ -135,7 +130,7 @@ impl FileReader {
     ) -> Result<(), Error> {
         let new_content = Self::read_tail(journal_offsets, &event)?;
 
-        let buf = journal_file_buffer.entry(event).or_insert_with(String::new);
+        let buf = journal_file_buffer.entry(event).or_default();
         buf.push_str(&new_content);
 
         while let Some(pos) = buf.find('\n') {
