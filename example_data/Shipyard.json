@@ -1,0 +1,3 @@
+{ "timestamp":"2026-01-25T21:29:06Z", "event":"Shipyard", "MarketID":3708671488, "StationName":"W7H-6DZ", "StarSystem":"Spoihaae XE-X d2-9", "Horizons":true, "AllowCobraMkIV":false, "PriceList":[ 
+{ "id":0, "ShipType":"krait_light", "ShipType_Localised":"Krait Phantom", "ShipPrice":77791228 }
+ ] }

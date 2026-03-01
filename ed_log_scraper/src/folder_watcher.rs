@@ -45,7 +45,7 @@ impl FolderWatcher {
                 }
             };
 
-            if let EventKind::Modify(ModifyKind::Data(DataChange::Content)) = evt.kind {
+            if let EventKind::Modify(ModifyKind::Any) = evt.kind {
                 for path in evt.paths {
                     if path
                         .extension()

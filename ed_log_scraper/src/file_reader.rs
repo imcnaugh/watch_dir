@@ -7,7 +7,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 
 pub struct FileReader {
-    rx: Option<mpsc::Receiver<String>>,
+    rx: Option<mpsc::Receiver<(PathBuf, String)>>,
     _folder_watcher: FolderWatcher,
 }
 
@@ -51,7 +51,7 @@ impl FileReader {
         let mut folder_watcher = FolderWatcher::new(path, extensions);
         let watcher_rx = folder_watcher.take_receiver().unwrap();
 
-        let (tx, rx) = mpsc::channel::<String>();
+        let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
 
         std::thread::spawn(move || {
             Self::run(
@@ -69,13 +69,13 @@ impl FileReader {
         })
     }
 
-    pub fn take_receiver(&mut self) -> Option<mpsc::Receiver<String>> {
+    pub fn take_receiver(&mut self) -> Option<mpsc::Receiver<(PathBuf, String)>> {
         self.rx.take()
     }
 
     fn run(
         watcher_rx: mpsc::Receiver<PathBuf>,
-        tx: Sender<String>,
+        tx: Sender<(PathBuf, String)>,
         mut journal_offsets: HashMap<PathBuf, u64>,
         mut journal_file_buffer: HashMap<PathBuf, String>,
         read_strategy_selector: impl Fn(&PathBuf) -> ReadStrategy + Send + 'static,
@@ -116,9 +116,10 @@ impl FileReader {
     fn tail_strategy(
         journal_offsets: &mut HashMap<PathBuf, u64>,
         event: PathBuf,
-        tx: &Sender<String>,
+        tx: &Sender<(PathBuf, String)>,
     ) -> Result<(), Error> {
-        let _ = tx.send(Self::read_tail(journal_offsets, &event)?);
+        let tail = Self::read_tail(journal_offsets, &event)?;
+        let _ = tx.send((event, tail));
         Ok(())
     }
 
@@ -126,29 +127,30 @@ impl FileReader {
         journal_offsets: &mut HashMap<PathBuf, u64>,
         journal_file_buffer: &mut HashMap<PathBuf, String>,
         event: PathBuf,
-        tx: &Sender<String>,
+        tx: &Sender<(PathBuf, String)>,
     ) -> Result<(), Error> {
         let new_content = Self::read_tail(journal_offsets, &event)?;
 
-        let buf = journal_file_buffer.entry(event).or_default();
+        let buf = journal_file_buffer.entry(event.clone()).or_default();
         buf.push_str(&new_content);
 
         while let Some(pos) = buf.find('\n') {
             let line = buf.drain(..=pos).collect::<String>();
             let line = line.trim_end_matches('\n').to_string();
             if !line.is_empty() {
-                let _ = tx.send(line);
+                let _ = tx.send((event.clone(), line));
             }
         }
 
         Ok(())
     }
 
-    fn replace_strategy(event: PathBuf, tx: &Sender<String>) -> Result<(), Error> {
+    fn replace_strategy(event: PathBuf, tx: &Sender<(PathBuf, String)>) -> Result<(), Error> {
         let mut f = File::open(&event)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        let _ = tx.send(String::from_utf8_lossy(&buf).to_string());
+        let string = String::from_utf8_lossy(&buf).to_string();
+        let _ = tx.send((event, string));
         Ok(())
     }
 }
