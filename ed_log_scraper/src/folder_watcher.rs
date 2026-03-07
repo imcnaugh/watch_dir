@@ -1,8 +1,9 @@
 use notify::EventKind;
-use notify::event::{DataChange, ModifyKind};
+use notify::event::ModifyKind;
+use notify::event::ModifyKind::{Data, Metadata};
 use notify::{Event, RecursiveMode, Watcher};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 
@@ -12,7 +13,7 @@ pub struct FolderWatcher {
 }
 
 impl FolderWatcher {
-    pub fn new(path: &Path, extensions_to_watch: HashSet<String>) -> Self {
+    pub fn new(path: &PathBuf, extensions_to_watch: HashSet<String>) -> Self {
         let (notify_tx, notify_rx) = mpsc::channel::<notify::Result<Event>>();
         let (tx, rx) = mpsc::channel::<PathBuf>();
 
@@ -32,7 +33,7 @@ impl FolderWatcher {
     }
 
     fn run(
-        notify_rx: mpsc::Receiver<notify::Result<Event>>,
+        notify_rx: Receiver<notify::Result<Event>>,
         tx: mpsc::Sender<PathBuf>,
         extensions_to_watch: HashSet<String>,
     ) {
@@ -45,7 +46,7 @@ impl FolderWatcher {
                 }
             };
 
-            if let EventKind::Modify(ModifyKind::Any) = evt.kind {
+            if let EventKind::Modify(Data(notify::event::DataChange::Content)) = evt.kind {
                 for path in evt.paths {
                     if path
                         .extension()

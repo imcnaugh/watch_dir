@@ -4,13 +4,14 @@ use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 
 pub struct FileReader {
     rx: Option<mpsc::Receiver<(PathBuf, String)>>,
     _folder_watcher: FolderWatcher,
 }
 
+#[derive(Debug)]
 pub enum ReadStrategy {
     Tail,      // emit whatever new bytes arrive
     TailLines, // buffer until newline, emit complete lines only
@@ -69,19 +70,20 @@ impl FileReader {
         })
     }
 
-    pub fn take_receiver(&mut self) -> Option<mpsc::Receiver<(PathBuf, String)>> {
+    pub fn take_receiver(&mut self) -> Option<Receiver<(PathBuf, String)>> {
         self.rx.take()
     }
 
     fn run(
-        watcher_rx: mpsc::Receiver<PathBuf>,
+        watcher_rx: Receiver<PathBuf>,
         tx: Sender<(PathBuf, String)>,
         mut journal_offsets: HashMap<PathBuf, u64>,
         mut journal_file_buffer: HashMap<PathBuf, String>,
         read_strategy_selector: impl Fn(&PathBuf) -> ReadStrategy + Send + 'static,
     ) {
         for event in watcher_rx {
-            if let Err(e) = match read_strategy_selector(&event) {
+            let strategy = read_strategy_selector(&event);
+            if let Err(e) = match strategy {
                 ReadStrategy::Tail => Self::tail_strategy(&mut journal_offsets, event, &tx),
                 ReadStrategy::TailLines => Self::tail_lines_strategy(
                     &mut journal_offsets,
