@@ -1,6 +1,4 @@
 use notify::EventKind;
-use notify::event::ModifyKind;
-use notify::event::ModifyKind::{Data, Metadata};
 use notify::{Event, RecursiveMode, Watcher};
 use std::collections::HashSet;
 use std::path::PathBuf;
