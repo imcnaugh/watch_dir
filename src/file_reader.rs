@@ -7,7 +7,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
 pub struct FileReader {
-    rx: Option<mpsc::Receiver<(PathBuf, String)>>,
+    rx: Option<Receiver<(PathBuf, String)>>,
     _folder_watcher: FolderWatcher,
 }
 

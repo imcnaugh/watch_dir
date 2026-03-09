@@ -1,7 +1,0 @@
-[package]
-name = "dev_test_main"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-watch_dir = {path = "../watch_dir" }
