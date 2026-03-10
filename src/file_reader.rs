@@ -1,7 +1,7 @@
 use crate::folder_watcher::FolderWatcher;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Error, Read, Seek, SeekFrom};
+use std::io::{Error, ErrorKind, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -32,11 +32,11 @@ impl FileReader {
             .flatten()
             .map(|entry| entry.path())
             .filter(|path| path.is_file())
-            .filter(|path| match read_strategy_selector(path) {
-                ReadStrategy::Tail => true,
-                ReadStrategy::TailLines => true,
-                ReadStrategy::Replace => false,
-                ReadStrategy::Ignore => false,
+            .filter(|path| {
+                matches!(
+                    read_strategy_selector(path),
+                    ReadStrategy::Tail | ReadStrategy::TailLines
+                )
             })
             .flat_map(|path| {
                 let path = path.canonicalize()?;
@@ -46,16 +46,8 @@ impl FileReader {
             })
             .collect::<HashMap<PathBuf, u64>>();
 
-        let extensions = offsets
-            .keys()
-            .filter_map(|path| {
-                path.extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| ext.to_owned())
-            })
-            .collect::<HashSet<String>>();
-
-        let mut folder_watcher = FolderWatcher::new(path, extensions);
+        let mut folder_watcher = FolderWatcher::new(path)
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
         let watcher_rx = folder_watcher.take_receiver().unwrap();
 
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
@@ -109,16 +101,20 @@ impl FileReader {
         journal_offsets: &mut HashMap<PathBuf, u64>,
         event: &PathBuf,
     ) -> Result<String, Error> {
-        let offset = journal_offsets.get(event).unwrap_or(&0);
+        let offset = journal_offsets.get(event).copied().unwrap_or(0);
 
         let mut f = File::open(event)?;
         let current_file_length = f.metadata()?.len();
-        f.seek(SeekFrom::Start(*offset))?;
+
+        // Reset offset if the file was truncated (e.g. log rotation)
+        let offset = if current_file_length < offset { 0 } else { offset };
+
+        f.seek(SeekFrom::Start(offset))?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
 
         journal_offsets.insert(event.clone(), current_file_length);
-        Ok(String::from_utf8_lossy(&buf).to_string())
+        Ok(String::from_utf8_lossy(&buf).into_owned())
     }
 
     fn tail_strategy(
@@ -143,10 +139,11 @@ impl FileReader {
         buf.push_str(&new_content);
 
         while let Some(pos) = buf.find('\n') {
-            let line = buf.drain(..=pos).collect::<String>();
-            let line = line.trim_end_matches('\n').to_string();
+            let line: String = buf.drain(..pos).collect();
+            buf.drain(..1); // consume the newline
+            let line = line.trim_end_matches('\r'); // handle \r\n
             if !line.is_empty() {
-                let _ = tx.send((event.clone(), line));
+                let _ = tx.send((event.clone(), line.to_string()));
             }
         }
 
@@ -157,7 +154,7 @@ impl FileReader {
         let mut f = File::open(&event)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        let string = String::from_utf8_lossy(&buf).to_string();
+        let string = String::from_utf8_lossy(&buf).into_owned();
         let _ = tx.send((event, string));
         Ok(())
     }

@@ -1,40 +1,35 @@
 use notify::EventKind;
 use notify::{Event, RecursiveMode, Watcher};
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 
-pub struct FolderWatcher {
+pub(crate) struct FolderWatcher {
     _watcher: notify::RecommendedWatcher,
     rx: Option<Receiver<PathBuf>>,
 }
 
 impl FolderWatcher {
-    pub fn new(path: &Path, extensions_to_watch: HashSet<String>) -> Self {
+    pub fn new(path: &Path) -> Result<Self, notify::Error> {
         let (notify_tx, notify_rx) = mpsc::channel::<notify::Result<Event>>();
         let (tx, rx) = mpsc::channel::<PathBuf>();
 
-        let mut watcher = notify::recommended_watcher(notify_tx).unwrap();
-        watcher.watch(path, RecursiveMode::NonRecursive).unwrap();
+        let mut watcher = notify::recommended_watcher(notify_tx)?;
+        watcher.watch(path, RecursiveMode::NonRecursive)?;
 
-        std::thread::spawn(move || Self::run(notify_rx, tx, extensions_to_watch));
+        std::thread::spawn(move || Self::run(notify_rx, tx));
 
-        Self {
+        Ok(Self {
             _watcher: watcher,
             rx: Some(rx),
-        }
+        })
     }
 
     pub fn take_receiver(&mut self) -> Option<Receiver<PathBuf>> {
         self.rx.take()
     }
 
-    fn run(
-        notify_rx: Receiver<notify::Result<Event>>,
-        tx: mpsc::Sender<PathBuf>,
-        extensions_to_watch: HashSet<String>,
-    ) {
+    fn run(notify_rx: Receiver<notify::Result<Event>>, tx: mpsc::Sender<PathBuf>) {
         for event in notify_rx {
             let evt = match event {
                 Ok(evt) => evt,
@@ -46,13 +41,7 @@ impl FolderWatcher {
 
             if let EventKind::Modify(_) = evt.kind {
                 for path in evt.paths {
-                    if path
-                        .extension()
-                        .and_then(|ext| ext.to_str())
-                        .is_some_and(|ext_str| extensions_to_watch.contains(ext_str))
-                    {
-                        let _ = tx.send(path);
-                    }
+                    let _ = tx.send(path);
                 }
             }
         }

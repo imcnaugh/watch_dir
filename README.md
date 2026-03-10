@@ -72,7 +72,7 @@ Convenience constants `TAIL_STRATEGY`, `TAIL_LINES_STRATEGY`, and `REPLACE_STRAT
 
 ### `FileReader::new(path, strategy_fn) -> Result<FileReader, Error>`
 
-Creates a watcher for the given directory. `strategy_fn` is called with the path of each changed file and returns the `ReadStrategy` to use. Only files whose extensions are present in the directory at startup are watched.
+Creates a watcher for the given directory. `strategy_fn` is called with the path of each changed file and returns the `ReadStrategy` to use. All modified files are observed; `strategy_fn` returning `ReadStrategy::Ignore` is how you opt individual files out.
 
 ### `FileReader::take_receiver() -> Option<Receiver<(PathBuf, String)>>`
 
