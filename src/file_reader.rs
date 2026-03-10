@@ -32,6 +32,12 @@ impl FileReader {
             .flatten()
             .map(|entry| entry.path())
             .filter(|path| path.is_file())
+            .filter(|path| match read_strategy_selector(path) {
+                ReadStrategy::Tail => true,
+                ReadStrategy::TailLines => true,
+                ReadStrategy::Replace => false,
+                ReadStrategy::Ignore => false,
+            })
             .flat_map(|path| {
                 let path = path.canonicalize()?;
                 let f = File::open(&path)?;
