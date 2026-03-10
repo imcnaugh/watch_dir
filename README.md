@@ -36,9 +36,9 @@ fn main() {
 
 ```rust
 use watch_dir::{FileReader, ReadStrategy};
-use std::path::PathBuf;
+use std::path::Path;
 
-fn my_strategy(path: &PathBuf) -> ReadStrategy {
+fn my_strategy(path: &Path) -> ReadStrategy {
     match path.extension().and_then(|e| e.to_str()) {
         Some("log") => ReadStrategy::TailLines, // emit complete lines as they appear
         Some("json") => ReadStrategy::Replace,  // re-read the whole file on each change

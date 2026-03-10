@@ -2,7 +2,7 @@ use crate::folder_watcher::FolderWatcher;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -19,14 +19,14 @@ pub enum ReadStrategy {
     Ignore,    // ignore the file
 }
 
-pub const REPLACE_STRATEGY: fn(&PathBuf) -> ReadStrategy = |_| ReadStrategy::Replace;
-pub const TAIL_STRATEGY: fn(&PathBuf) -> ReadStrategy = |_| ReadStrategy::Tail;
-pub const TAIL_LINES_STRATEGY: fn(&PathBuf) -> ReadStrategy = |_| ReadStrategy::TailLines;
+pub const REPLACE_STRATEGY: fn(&Path) -> ReadStrategy = |_| ReadStrategy::Replace;
+pub const TAIL_STRATEGY: fn(&Path) -> ReadStrategy = |_| ReadStrategy::Tail;
+pub const TAIL_LINES_STRATEGY: fn(&Path) -> ReadStrategy = |_| ReadStrategy::TailLines;
 
 impl FileReader {
     pub fn new(
-        path: &PathBuf,
-        read_strategy_selector: impl Fn(&PathBuf) -> ReadStrategy + Send + 'static,
+        path: &Path,
+        read_strategy_selector: impl Fn(&Path) -> ReadStrategy + Send + 'static,
     ) -> Result<Self, Error> {
         let offsets = std::fs::read_dir(path)?
             .flatten()
@@ -79,7 +79,7 @@ impl FileReader {
         tx: Sender<(PathBuf, String)>,
         mut journal_offsets: HashMap<PathBuf, u64>,
         mut journal_file_buffer: HashMap<PathBuf, String>,
-        read_strategy_selector: impl Fn(&PathBuf) -> ReadStrategy + Send + 'static,
+        read_strategy_selector: impl Fn(&Path) -> ReadStrategy + Send + 'static,
     ) {
         for event in watcher_rx {
             let strategy = read_strategy_selector(&event);
