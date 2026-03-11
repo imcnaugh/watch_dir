@@ -1,7 +1,7 @@
 use crate::folder_watcher::FolderWatcher;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Error, ErrorKind, Read, Seek, SeekFrom};
+use std::io::{Error, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -46,8 +46,7 @@ impl FileReader {
             })
             .collect::<HashMap<PathBuf, u64>>();
 
-        let mut folder_watcher =
-            FolderWatcher::new(path).map_err(|e| Error::new(ErrorKind::Other, e))?;
+        let mut folder_watcher = FolderWatcher::new(path).map_err(Error::other)?;
         let watcher_rx = folder_watcher.take_receiver().unwrap();
 
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();

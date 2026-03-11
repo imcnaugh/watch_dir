@@ -1,4 +1,5 @@
 use notify::EventKind;
+use notify::event::ModifyKind;
 use notify::{Event, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -39,7 +40,14 @@ impl FolderWatcher {
                 }
             };
 
-            if let EventKind::Modify(_) = evt.kind {
+            let is_modify = match evt.kind {
+                #[cfg(target_os = "macos")]
+                EventKind::Modify(ModifyKind::Data(_)) => true,
+                #[cfg(target_os = "windows")]
+                EventKind::Modify(ModifyKind::Any) => true,
+                _ => false,
+            };
+            if is_modify {
                 for path in evt.paths {
                     let _ = tx.send(path);
                 }
