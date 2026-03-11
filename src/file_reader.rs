@@ -46,8 +46,8 @@ impl FileReader {
             })
             .collect::<HashMap<PathBuf, u64>>();
 
-        let mut folder_watcher = FolderWatcher::new(path)
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        let mut folder_watcher =
+            FolderWatcher::new(path).map_err(|e| Error::new(ErrorKind::Other, e))?;
         let watcher_rx = folder_watcher.take_receiver().unwrap();
 
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
@@ -107,7 +107,11 @@ impl FileReader {
         let current_file_length = f.metadata()?.len();
 
         // Reset offset if the file was truncated (e.g. log rotation)
-        let offset = if current_file_length < offset { 0 } else { offset };
+        let offset = if current_file_length < offset {
+            0
+        } else {
+            offset
+        };
 
         f.seek(SeekFrom::Start(offset))?;
         let mut buf = Vec::new();
