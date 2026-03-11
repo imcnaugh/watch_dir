@@ -48,7 +48,6 @@ impl FolderWatcher {
                 _ => false,
             };
             if is_modify {
-                println!("{:?}", evt);
                 for path in evt.paths {
                     let _ = tx.send(path);
                 }

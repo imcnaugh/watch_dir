@@ -34,8 +34,6 @@ fn replace_strategy_multiple_replace_test() {
     std::fs::write(test_file.clone(), "").unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    println!("file created");
-
     let strat = |path: &Path| -> ReadStrategy {
         if let Some(extension) = path.extension() {
             if extension == "txt" {
