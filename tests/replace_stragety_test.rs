@@ -21,13 +21,20 @@ fn replace_strategy_simple_test() {
 
     let msg = rx.try_recv().unwrap();
     assert_eq!(msg.1, "test");
-    assert_eq!(test_file.canonicalize().unwrap(), msg.0);
+    assert_eq!(test_file.canonicalize().unwrap(), msg.0.canonicalize().unwrap());
+
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty))
 }
 
 #[test]
 fn replace_strategy_multiple_replace_test() {
     let dir = common::TestDir::new("replace_strategy_multiple_replace_test");
     let test_file = Path::new(dir.path()).join("test_file.txt");
+
+    std::fs::write(test_file.clone(), "").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    println!("file created");
 
     let strat = |path: &Path| -> ReadStrategy {
         if let Some(extension) = path.extension() {
@@ -48,12 +55,16 @@ fn replace_strategy_multiple_replace_test() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let msg = rx.recv().unwrap();
+    println!("{:?}", msg);
     assert_eq!(msg.1, "test");
-    assert_eq!(test_file.canonicalize().unwrap(), msg.0);
+    assert_eq!(test_file.canonicalize().unwrap(), msg.0.canonicalize().unwrap());
 
     std::fs::write(test_file.clone(), "test2").unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
     let msg = rx.recv().unwrap();
+    println!("{:?}", msg);
     assert_eq!(msg.1, "test2");
-    assert_eq!(test_file.canonicalize().unwrap(), msg.0);
+    assert_eq!(test_file.canonicalize().unwrap(), msg.0.canonicalize().unwrap());
+
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
 }
