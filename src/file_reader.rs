@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
-pub struct FileReader {
+pub struct Watcher {
     rx: Option<Receiver<(PathBuf, String)>>,
     _folder_watcher: FolderWatcher,
 }
@@ -23,7 +23,7 @@ pub const REPLACE_STRATEGY: fn(&Path) -> ReadStrategy = |_| ReadStrategy::Replac
 pub const TAIL_STRATEGY: fn(&Path) -> ReadStrategy = |_| ReadStrategy::Tail;
 pub const TAIL_LINES_STRATEGY: fn(&Path) -> ReadStrategy = |_| ReadStrategy::TailLines;
 
-impl FileReader {
+impl Watcher {
     pub fn new(
         path: &Path,
         read_strategy_selector: impl Fn(&Path) -> ReadStrategy + Send + 'static,

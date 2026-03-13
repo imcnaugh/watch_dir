@@ -9,10 +9,10 @@ use watch_dir::{REPLACE_STRATEGY, ReadStrategy};
 fn replace_strategy_simple_test() {
     let dir = common::TestDir::new("replace_strategy_simple_test");
 
-    let mut file_reader =
-        watch_dir::FileReader::new(Path::new(dir.path()), REPLACE_STRATEGY).unwrap();
+    let mut watcher =
+        watch_dir::Watcher::new(Path::new(dir.path()), REPLACE_STRATEGY).unwrap();
 
-    let rx = file_reader.take_receiver().unwrap();
+    let rx = watcher.take_receiver().unwrap();
     assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
 
     let test_file = Path::new(dir.path()).join("test_file.txt");
@@ -46,8 +46,8 @@ fn replace_strategy_multiple_replace_test() {
         }
     };
 
-    let mut file_reader = watch_dir::FileReader::new(Path::new(dir.path()), strat).unwrap();
-    let rx = file_reader.take_receiver().unwrap();
+    let mut watcher = watch_dir::Watcher::new(Path::new(dir.path()), strat).unwrap();
+    let rx = watcher.take_receiver().unwrap();
 
     std::fs::write(test_file.clone(), "test").unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
