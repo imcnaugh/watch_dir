@@ -18,13 +18,13 @@ watch_dir = { path = "../watch_dir" }
 ### Basic example
 
 ```rust
-use watch_dir::{FileReader, TAIL_LINES_STRATEGY};
+use watch_dir::{Watcher, TAIL_LINES_STRATEGY};
 use std::path::PathBuf;
 
 fn main() {
     let path = PathBuf::from("/path/to/watch");
-    let mut reader = FileReader::new(&path, TAIL_LINES_STRATEGY).unwrap();
-    let rx = reader.take_receiver().unwrap();
+    let mut watcher = Watcher::new(&path, TAIL_LINES_STRATEGY).unwrap();
+    let rx = watcher.take_receiver().unwrap();
 
     for (path, content) in rx {
         println!("{:?}: {}", path, content);
@@ -35,7 +35,7 @@ fn main() {
 ### Custom strategy per file type
 
 ```rust
-use watch_dir::{FileReader, ReadStrategy};
+use watch_dir::{Watcher, ReadStrategy};
 use std::path::Path;
 
 fn my_strategy(path: &Path) -> ReadStrategy {
@@ -48,8 +48,8 @@ fn my_strategy(path: &Path) -> ReadStrategy {
 
 fn main() {
     let path = PathBuf::from("/path/to/watch");
-    let mut reader = FileReader::new(&path, my_strategy).unwrap();
-    let rx = reader.take_receiver().unwrap();
+    let mut watcher = Watcher::new(&path, my_strategy).unwrap();
+    let rx = watcher.take_receiver().unwrap();
 
     for (path, content) in rx {
         println!("{:?}: {}", path, content);
@@ -70,11 +70,11 @@ Convenience constants `TAIL_STRATEGY`, `TAIL_LINES_STRATEGY`, and `REPLACE_STRAT
 
 ## API
 
-### `FileReader::new(path, strategy_fn) -> Result<FileReader, Error>`
+### `Watcher::new(path, strategy_fn) -> Result<Watcher, Error>`
 
 Creates a watcher for the given directory. `strategy_fn` is called with the path of each changed file and returns the `ReadStrategy` to use. All modified files are observed; `strategy_fn` returning `ReadStrategy::Ignore` is how you opt individual files out.
 
-### `FileReader::take_receiver() -> Option<Receiver<(PathBuf, String)>>`
+### `Watcher::take_receiver() -> Option<Receiver<(PathBuf, String)>>`
 
 Returns the channel receiver. Each message is a `(path, content)` tuple where `content` depends on the read strategy applied to that file.
 
@@ -87,7 +87,7 @@ Directory
 FolderWatcher
     │  (PathBuf of modified file)
     ▼
-FileReader
+Watcher
     │  (applies ReadStrategy, reads file)
     ▼
 Receiver<(PathBuf, String)>
@@ -96,7 +96,7 @@ Receiver<(PathBuf, String)>
 Your code
 ```
 
-`FileReader` spawns a background thread that:
+`Watcher` spawns a background thread that:
 1. Receives file modification events from `FolderWatcher`
 2. Applies the configured read strategy
 3. Sends `(path, content)` pairs to a channel you consume
