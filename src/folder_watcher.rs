@@ -11,12 +11,16 @@ pub(crate) struct FolderWatcher {
 }
 
 impl FolderWatcher {
-    pub fn new(path: &Path) -> Result<Self, notify::Error> {
+    pub fn new(path: &Path, options: crate::Options) -> Result<Self, notify::Error> {
         let (notify_tx, notify_rx) = mpsc::channel::<notify::Result<Event>>();
         let (tx, rx) = mpsc::channel::<PathBuf>();
 
         let mut watcher = notify::recommended_watcher(notify_tx)?;
-        watcher.watch(path, RecursiveMode::NonRecursive)?;
+        let recursive_mode = match options.recursive {
+            true => RecursiveMode::Recursive,
+            false => RecursiveMode::NonRecursive,
+        };
+        watcher.watch(path, recursive_mode)?;
 
         std::thread::spawn(move || Self::run(notify_rx, tx));
 

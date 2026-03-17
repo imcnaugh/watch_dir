@@ -27,6 +27,7 @@ impl Watcher {
     pub fn new(
         path: &Path,
         read_strategy_selector: impl Fn(&Path) -> ReadStrategy + Send + 'static,
+        options: crate::Options,
     ) -> Result<Self, Error> {
         let offsets = std::fs::read_dir(path)?
             .flatten()
@@ -46,7 +47,7 @@ impl Watcher {
             })
             .collect::<HashMap<PathBuf, u64>>();
 
-        let mut folder_watcher = FolderWatcher::new(path).map_err(Error::other)?;
+        let mut folder_watcher = FolderWatcher::new(path, options).map_err(Error::other)?;
         let watcher_rx = folder_watcher.take_receiver().unwrap();
 
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();

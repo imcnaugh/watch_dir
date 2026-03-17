@@ -9,8 +9,7 @@ use watch_dir::{REPLACE_STRATEGY, ReadStrategy};
 fn replace_strategy_simple_test() {
     let dir = common::TestDir::new("replace_strategy_simple_test");
 
-    let mut watcher =
-        watch_dir::Watcher::new(Path::new(dir.path()), REPLACE_STRATEGY).unwrap();
+    let mut watcher = watch_dir::Watcher::new(Path::new(dir.path()), REPLACE_STRATEGY).unwrap();
 
     let rx = watcher.take_receiver().unwrap();
     assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
@@ -21,7 +20,10 @@ fn replace_strategy_simple_test() {
 
     let msg = rx.try_recv().unwrap();
     assert_eq!(msg.1, "test");
-    assert_eq!(test_file.canonicalize().unwrap(), msg.0.canonicalize().unwrap());
+    assert_eq!(
+        test_file.canonicalize().unwrap(),
+        msg.0.canonicalize().unwrap()
+    );
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty))
 }
@@ -55,14 +57,20 @@ fn replace_strategy_multiple_replace_test() {
     let msg = rx.recv().unwrap();
     println!("{:?}", msg);
     assert_eq!(msg.1, "test");
-    assert_eq!(test_file.canonicalize().unwrap(), msg.0.canonicalize().unwrap());
+    assert_eq!(
+        test_file.canonicalize().unwrap(),
+        msg.0.canonicalize().unwrap()
+    );
 
     std::fs::write(test_file.clone(), "test2").unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
     let msg = rx.recv().unwrap();
     println!("{:?}", msg);
     assert_eq!(msg.1, "test2");
-    assert_eq!(test_file.canonicalize().unwrap(), msg.0.canonicalize().unwrap());
+    assert_eq!(
+        test_file.canonicalize().unwrap(),
+        msg.0.canonicalize().unwrap()
+    );
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
 }
