@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
+use crate::folder_watcher::Actions::{Pause, Run, Stop};
 
 pub(crate) struct FolderWatcher {
     _watcher: notify::RecommendedWatcher,
@@ -14,11 +15,10 @@ pub(crate) struct FolderWatcher {
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
-pub(crate) enum Actions {
-    Start,
+enum Actions {
+    Run,
     Stop,
     Pause,
-    Resume,
 }
 
 impl FolderWatcher {
@@ -48,8 +48,19 @@ impl FolderWatcher {
         self.rx.take()
     }
 
-    pub fn send_action(&self, action: Actions) {
-        let _ = self.control_tx.send(action);
+    pub fn run(&self) {
+        let _ = self.control_tx.send(Run);
+    }
+
+    pub fn pause(&self) {
+        let _ = self.control_tx.send(Pause);
+    }
+
+    pub fn stop(&mut self) {
+        let _ = self.control_tx.send(Stop);
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
     }
 }
 
@@ -63,10 +74,9 @@ fn run(
     loop {
         while let Ok(action) = control_rx.try_recv() {
             match action {
-                Actions::Stop => return,
-                Actions::Pause => paused = true,
-                Actions::Resume => paused = false,
-                Actions::Start => {}
+                Stop => return,
+                Pause => paused = true,
+                Run => paused = false,
             }
         }
 
