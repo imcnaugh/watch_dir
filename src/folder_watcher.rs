@@ -4,16 +4,28 @@ use notify::{Event, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
+use std::sync::mpsc::RecvTimeoutError;
+use std::time::Duration;
 
 pub(crate) struct FolderWatcher {
     _watcher: notify::RecommendedWatcher,
     rx: Option<Receiver<PathBuf>>,
+    control_tx: mpsc::Sender<Actions>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+pub(crate) enum Actions {
+    Start,
+    Stop,
+    Pause,
+    Resume,
 }
 
 impl FolderWatcher {
     pub fn new(path: &Path, options: crate::Options) -> Result<Self, notify::Error> {
         let (notify_tx, notify_rx) = mpsc::channel::<notify::Result<Event>>();
         let (tx, rx) = mpsc::channel::<PathBuf>();
+        let (control_tx, control_rx) = mpsc::channel::<Actions>();
 
         let mut watcher = notify::recommended_watcher(notify_tx)?;
         let recursive_mode = match options.recursive {
@@ -22,11 +34,13 @@ impl FolderWatcher {
         };
         watcher.watch(path, recursive_mode)?;
 
-        std::thread::spawn(move || Self::run(notify_rx, tx));
+        let handle = std::thread::spawn(move || run(notify_rx, tx, control_rx));
 
         Ok(Self {
             _watcher: watcher,
             rx: Some(rx),
+            control_tx,
+            handle: Some(handle),
         })
     }
 
@@ -34,28 +48,58 @@ impl FolderWatcher {
         self.rx.take()
     }
 
-    fn run(notify_rx: Receiver<notify::Result<Event>>, tx: mpsc::Sender<PathBuf>) {
-        for event in notify_rx {
-            let evt = match event {
-                Ok(evt) => evt,
-                Err(e) => {
-                    eprintln!("watch error: {:?}", e);
-                    continue;
-                }
-            };
+    pub fn send_action(&self, action: Actions) {
+        let _ = self.control_tx.send(action);
+    }
+}
 
-            let is_modify = match evt.kind {
-                #[cfg(target_os = "macos")]
-                EventKind::Modify(ModifyKind::Data(_)) => true,
-                #[cfg(target_os = "windows")]
-                EventKind::Modify(ModifyKind::Any) => true,
-                _ => false,
-            };
-            if is_modify {
-                for path in evt.paths {
-                    let _ = tx.send(path);
+fn run(
+    notify_rx: Receiver<notify::Result<Event>>,
+    tx: mpsc::Sender<PathBuf>,
+    control_rx: Receiver<Actions>,
+) {
+    let mut paused = false;
+
+    loop {
+        while let Ok(action) = control_rx.try_recv() {
+            match action {
+                Actions::Stop => return,
+                Actions::Pause => paused = true,
+                Actions::Resume => paused = false,
+                Actions::Start => {}
+            }
+        }
+
+        if paused {
+            std::thread::sleep(Duration::from_millis(50));
+            continue;
+        }
+
+        match notify_rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(event) => {
+                let evt = match event {
+                    Ok(evt) => evt,
+                    Err(e) => {
+                        eprintln!("watch error: {:?}", e);
+                        continue;
+                    }
+                };
+
+                let is_modify = match evt.kind {
+                    #[cfg(target_os = "macos")]
+                    EventKind::Modify(ModifyKind::Data(_)) => true,
+                    #[cfg(target_os = "windows")]
+                    EventKind::Modify(ModifyKind::Any) => true,
+                    _ => false,
+                };
+                if is_modify {
+                    for path in evt.paths {
+                        let _ = tx.send(path);
+                    }
                 }
             }
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => return,
         }
     }
 }
