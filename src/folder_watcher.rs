@@ -1,3 +1,4 @@
+use crate::folder_watcher::Actions::{Pause, Run, Stop};
 use notify::EventKind;
 use notify::event::ModifyKind;
 use notify::{Event, RecursiveMode, Watcher};
@@ -6,7 +7,6 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
-use crate::folder_watcher::Actions::{Pause, Run, Stop};
 
 pub(crate) struct FolderWatcher {
     _watcher: notify::RecommendedWatcher,
