@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
+use std::thread;
 use std::time::Duration;
 
 pub(crate) struct FolderWatcher {
@@ -34,7 +35,9 @@ impl FolderWatcher {
         };
         watcher.watch(path, recursive_mode)?;
 
-        let handle = std::thread::spawn(move || run(notify_rx, tx, control_rx));
+        let handle = thread::Builder::new()
+            .name("watch_dir-rs Folder Watcher".to_string())
+            .spawn(move || run(notify_rx, tx, control_rx))?;
 
         Ok(Self {
             _watcher: watcher,

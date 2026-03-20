@@ -5,6 +5,7 @@ use std::io::{Error, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::thread;
 
 pub struct Watcher {
     rx: Option<Receiver<(PathBuf, String)>>,
@@ -62,20 +63,22 @@ impl Watcher {
 
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
 
-        let handle = std::thread::spawn(move || {
-            run(
-                watcher_rx,
-                tx,
-                control_rx,
-                offsets,
-                HashMap::new(),
-                read_strategy_selector,
-            )
-        });
+        let handle = thread::Builder::new()
+            .name("watch_dir-rs File Reader".to_string())
+            .spawn(move || {
+                run(
+                    watcher_rx,
+                    tx,
+                    control_rx,
+                    offsets,
+                    HashMap::new(),
+                    read_strategy_selector,
+                )
+            })?;
 
         Ok(Self {
             rx: Some(rx),
-            folder_watcher: folder_watcher,
+            folder_watcher,
             control_tx,
             handle: Some(handle),
         })
@@ -124,7 +127,7 @@ fn run(
         }
 
         if paused {
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            thread::sleep(std::time::Duration::from_millis(50));
             continue;
         }
 
