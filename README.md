@@ -78,29 +78,6 @@ Creates a watcher for the given directory. `strategy_fn` is called with the path
 
 Returns the channel receiver. Each message is a `(path, content)` tuple where `content` depends on the read strategy applied to that file.
 
-## How it works
-
-```
-Directory
-    │  (fs events via notify)
-    ▼
-FolderWatcher
-    │  (PathBuf of modified file)
-    ▼
-Watcher
-    │  (applies ReadStrategy, reads file)
-    ▼
-Receiver<(PathBuf, String)>
-    │
-    ▼
-Your code
-```
-
-`Watcher` spawns a background thread that:
-1. Receives file modification events from `FolderWatcher`
-2. Applies the configured read strategy
-3. Sends `(path, content)` pairs to a channel you consume
-
 ## Dependencies
 
 - [`notify`](https://crates.io/crates/notify) — cross-platform file system event detection
