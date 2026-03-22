@@ -1,10 +1,11 @@
-use crate::ReadStrategy;
 use crate::error::WatchDirError;
-use notify::{RecommendedWatcher, RecursiveMode};
+use crate::options::Options;
+use crate::worker::Worker;
+use crate::{ReadStrategy, SelectStrategy};
+use notify::RecommendedWatcher;
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -15,21 +16,6 @@ pub struct Watcher {
     rx: Option<Receiver<(PathBuf, String)>>,
     control_tx: Sender<Actions>,
     handle: std::thread::JoinHandle<()>,
-}
-
-pub trait SelectStrategy: Send + 'static {
-    fn select(&self, path: &Path) -> ReadStrategy;
-}
-
-impl<F: Fn(&Path) -> ReadStrategy + Send + 'static> SelectStrategy for F {
-    fn select(&self, path: &Path) -> ReadStrategy {
-        self(path)
-    }
-}
-
-pub struct Options {
-    recursive: bool,
-    read_strategy_selector: Box<dyn SelectStrategy>,
 }
 
 impl Watcher {
@@ -44,19 +30,18 @@ impl Watcher {
         let mut offsets = HashMap::new();
         populate_offsets(
             path,
-            options.recursive(),
+            options.recursive,
             &*options.read_strategy_selector,
             &mut offsets,
         )?;
 
-        let worker = Worker {
+        let worker = Worker::new(
             notify_rx,
             tx,
             control_rx,
-            read_strategy_selector: options.read_strategy_selector,
+            options.read_strategy_selector,
             offsets,
-            line_buffers: Default::default(),
-        };
+        );
 
         let handle = std::thread::Builder::new()
             .name("watch_dir-rs Watcher".to_string())
@@ -89,107 +74,10 @@ impl Watcher {
     }
 }
 
-struct Worker {
-    notify_rx: Receiver<DebounceEventResult>,
-    tx: Sender<(PathBuf, String)>,
-    control_rx: Receiver<Actions>,
-    read_strategy_selector: Box<dyn SelectStrategy>,
-    offsets: HashMap<PathBuf, u64>,
-    line_buffers: HashMap<PathBuf, String>,
-}
-
-impl Worker {
-    fn run(mut self) {
-        let mut paused = false;
-        loop {
-            while let Ok(action) = self.control_rx.try_recv() {
-                match action {
-                    Actions::Pause => paused = true,
-                    Actions::Run => paused = false,
-                    Actions::Stop => return,
-                }
-            }
-
-            if paused {
-                std::thread::sleep(Duration::from_millis(50));
-                continue;
-            }
-
-            match self.notify_rx.recv_timeout(Duration::from_millis(50)) {
-                Ok(event) => {
-                    if let Ok(event) = event {
-                        event
-                            .iter()
-                            .filter(|e| e.kind.is_modify())
-                            .flat_map(|e| &e.paths)
-                            .for_each(|path| {
-                                let _ = match self.read_strategy_selector.select(path) {
-                                    ReadStrategy::Tail => self.tail_strategy(path),
-                                    ReadStrategy::TailLines => self.tail_lines_strategy(path),
-                                    ReadStrategy::Replace => self.replace_strategy(path),
-                                    ReadStrategy::Ignore => Ok(()),
-                                };
-                            })
-                    }
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => continue,
-                Err(mpsc::RecvTimeoutError::Disconnected) => return,
-            }
-        }
-    }
-
-    fn read_tail(&mut self, path: &Path) -> Result<String, std::io::Error> {
-        let offset = self.offsets.get(path).copied().unwrap_or(0);
-
-        let mut f = File::open(path)?;
-        let current_file_length = f.metadata()?.len();
-
-        let offset = if current_file_length < offset {
-            0
-        } else {
-            offset
-        };
-
-        f.seek(SeekFrom::Start(offset))?;
-        let mut buf = Vec::new();
-        f.read_to_end(&mut buf)?;
-
-        self.offsets.insert(path.to_path_buf(), current_file_length);
-        Ok(String::from_utf8_lossy(&buf).to_string())
-    }
-
-    fn tail_strategy(&mut self, path: &Path) -> Result<(), std::io::Error> {
-        let tail = self.read_tail(path)?;
-        let _ = self.tx.send((path.to_path_buf(), tail));
-        Ok(())
-    }
-
-    fn tail_lines_strategy(&mut self, path: &Path) -> Result<(), std::io::Error> {
-        let new_content = self.read_tail(path)?;
-
-        let buf = self.line_buffers.entry(path.to_path_buf()).or_default();
-        buf.push_str(&new_content);
-
-        while let Some(pos) = buf.find('\n') {
-            let line: String = buf.drain(..pos).collect();
-            buf.drain(..1);
-            let line = line.trim_end_matches('\r');
-            if !line.is_empty() {
-                let _ = self.tx.send((path.to_path_buf(), line.to_string()));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn replace_strategy(&mut self, path: &Path) -> Result<(), std::io::Error> {
-        let mut f = File::open(path)?;
-        let mut buf = Vec::new();
-        f.read_to_end(&mut buf)?;
-        let string = String::from_utf8_lossy(&buf).to_string();
-        let _ = self.tx.send((path.to_path_buf(), string));
-        Ok(())
-    }
+pub(crate) enum Actions {
+    Run,
+    Pause,
+    Stop,
 }
 
 fn populate_offsets(
@@ -212,49 +100,4 @@ fn populate_offsets(
         }
     }
     Ok(())
-}
-
-impl Options {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn with_recursive(mut self, recursive: bool) -> Self {
-        self.recursive = recursive;
-        self
-    }
-
-    pub fn recursive(&self) -> bool {
-        self.recursive
-    }
-
-    fn recursive_mode(&self) -> RecursiveMode {
-        match self.recursive {
-            true => RecursiveMode::Recursive,
-            false => RecursiveMode::NonRecursive,
-        }
-    }
-
-    pub fn with_read_strategy_selector(
-        mut self,
-        read_strategy_selector: impl SelectStrategy,
-    ) -> Self {
-        self.read_strategy_selector = Box::new(read_strategy_selector);
-        self
-    }
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            recursive: false,
-            read_strategy_selector: Box::new(crate::TAIL_STRATEGY),
-        }
-    }
-}
-
-enum Actions {
-    Run,
-    Pause,
-    Stop,
 }
