@@ -2,6 +2,8 @@ use crate::ReadStrategy;
 use crate::error::WatchDirError;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
+use std::collections::HashMap;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -38,9 +40,26 @@ impl Watcher {
         let mut debouncer = new_debouncer(Duration::from_secs(1), None, notify_tx)?;
         debouncer.watch(path, options.recursive_mode())?;
 
+        let mut offsets = HashMap::new();
+        populate_offsets(
+            path,
+            options.recursive(),
+            &*options.read_strategy_selector,
+            &mut offsets,
+        )?;
+
+        let worker = Worker {
+            notify_rx,
+            tx,
+            control_rx,
+            read_strategy_selector: options.read_strategy_selector,
+            offsets,
+            line_buffers: Default::default(),
+        };
+
         let handle = std::thread::Builder::new()
             .name("watch_dir-rs Watcher".to_string())
-            .spawn(move || run(notify_rx, tx, control_rx, options.read_strategy_selector))?;
+            .spawn(move || worker.run())?;
 
         Ok(Self {
             notify_watcher: debouncer,
@@ -69,46 +88,74 @@ impl Watcher {
     }
 }
 
-fn run(
+struct Worker {
     notify_rx: Receiver<DebounceEventResult>,
     tx: Sender<(PathBuf, String)>,
     control_rx: Receiver<Actions>,
     read_strategy_selector: Box<dyn SelectStrategy>,
-) {
-    let mut paused = false;
-    loop {
-        while let Ok(action) = control_rx.try_recv() {
-            match action {
-                Actions::Pause => paused = true,
-                Actions::Run => paused = false,
-                Actions::Stop => return,
-            }
-        }
+    offsets: HashMap<PathBuf, u64>,
+    line_buffers: HashMap<PathBuf, String>,
+}
 
-        if paused {
-            std::thread::sleep(Duration::from_millis(50));
-            continue;
-        }
-
-        match notify_rx.recv_timeout(Duration::from_millis(50)) {
-            Ok(event) => {
-                if let Ok(event) = event {
-                    event
-                        .iter()
-                        .filter(|e| e.kind.is_modify())
-                        .flat_map(|e| &e.paths)
-                        .for_each(|path| match read_strategy_selector.select(path) {
-                            ReadStrategy::Tail => {}
-                            ReadStrategy::TailLines => {}
-                            ReadStrategy::Replace => {}
-                            ReadStrategy::Ignore => {}
-                        })
+impl Worker {
+    fn run(mut self) {
+        let mut paused = false;
+        loop {
+            while let Ok(action) = self.control_rx.try_recv() {
+                match action {
+                    Actions::Pause => paused = true,
+                    Actions::Run => paused = false,
+                    Actions::Stop => return,
                 }
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(mpsc::RecvTimeoutError::Disconnected) => return,
+
+            if paused {
+                std::thread::sleep(Duration::from_millis(50));
+                continue;
+            }
+
+            match self.notify_rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(event) => {
+                    if let Ok(event) = event {
+                        event
+                            .iter()
+                            .filter(|e| e.kind.is_modify())
+                            .flat_map(|e| &e.paths)
+                            .for_each(|path| match self.read_strategy_selector.select(path) {
+                                ReadStrategy::Tail => {}
+                                ReadStrategy::TailLines => {}
+                                ReadStrategy::Replace => {}
+                                ReadStrategy::Ignore => {}
+                            })
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => return,
+            }
         }
     }
+}
+
+fn populate_offsets(
+    path: &Path,
+    recursive: bool,
+    read_strategy_selector: &dyn SelectStrategy,
+    offsets: &mut HashMap<PathBuf, u64>,
+) -> Result<(), std::io::Error> {
+    for entry in std::fs::read_dir(path)?.flatten() {
+        let entry_path = entry.path();
+        if entry_path.is_dir() && recursive {
+            populate_offsets(&entry_path, recursive, read_strategy_selector, offsets)?;
+        } else if entry_path.is_file() {
+            let read_strategy = read_strategy_selector.select(&entry_path);
+            if matches!(read_strategy, ReadStrategy::Tail | ReadStrategy::TailLines) {
+                let canonical = entry_path.canonicalize()?;
+                let len = File::open(&canonical)?.metadata()?.len();
+                offsets.insert(canonical, len);
+            }
+        }
+    }
+    Ok(())
 }
 
 impl Options {
@@ -119,6 +166,10 @@ impl Options {
     pub fn with_recursive(mut self, recursive: bool) -> Self {
         self.recursive = recursive;
         self
+    }
+
+    pub fn recursive(&self) -> bool {
+        self.recursive
     }
 
     fn recursive_mode(&self) -> RecursiveMode {
