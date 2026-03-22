@@ -15,19 +15,24 @@ cargo check          # fast type-check without building
 
 ## Architecture
 
-`watch_dir` is a Rust library that monitors a directory for file changes and streams modified file contents over an `mpsc` channel. There are two layers:
+`watch_dir` is a Rust library that monitors a directory for file changes and streams modified file contents over an `mpsc` channel.
 
-1. **`FolderWatcher`** (`src/folder_watcher.rs`) — wraps `notify::recommended_watcher`, filters for modify events (platform-specific: macOS vs Windows differ), and forwards changed `PathBuf`s over a channel.
+**Current target architecture** (in-progress refactor on branch `1-simplify-logic-into-a-single-threads`):
 
-2. **`Watcher`** (`src/file_reader.rs`) — the main public API. Receives paths from `FolderWatcher`, reads files using a caller-supplied strategy selector function `(PathBuf) -> ReadStrategy`, and sends `(PathBuf, String)` tuples to the consumer.
+- **`Watcher`** (`src/watcher.rs`) — the single consolidated public API. Uses `notify_debouncer_full` directly (no separate folder watcher thread), runs one background thread that receives debounced notify events, applies the `ReadStrategy`, reads files, and sends `(PathBuf, String)` tuples to the consumer. File reading logic (tail offsets, tail_lines buffering, replace) is being ported here from `file_reader.rs`.
 
-**`ReadStrategy`** controls how each file is read:
-- `Tail` — read only new bytes appended since last read (tracks byte offset)
-- `TailLines` — like Tail but buffers incomplete lines and only emits full lines
-- `Replace` — always read the full file contents
-- `Ignore` — skip this file
+- **`ReadStrategy`** (`src/read_strategy/mod.rs`) — already extracted as its own module:
+  - `Tail` — read only new bytes appended since last read (tracks byte offset)
+  - `TailLines` — like Tail but buffers incomplete lines and only emits full lines
+  - `Replace` — always read the full file contents
+  - `Ignore` — skip this file
+  - Also exports convenience constants: `TAIL_STRATEGY`, `TAIL_LINES_STRATEGY`, `REPLACE_STRATEGY`
 
-The library uses `std::sync::mpsc` channels and spawns background threads. The caller receives a `Receiver<(PathBuf, String)>` and pulls updates at their own pace.
+**Legacy files** (being replaced, not yet deleted):
+- `src/folder_watcher.rs` — old two-thread design wrapping raw `notify::recommended_watcher`
+- `src/file_reader.rs` — old `Watcher` that sat on top of `FolderWatcher`; contains the full file reading logic to be ported to `watcher.rs`
+
+The caller receives a `Receiver<(PathBuf, String)>` and pulls updates at their own pace.
 
 Integration tests (`tests/`) use `TestDir` (in `tests/common/mod.rs`) to create isolated temp directories and write files, then assert on channel messages.
 

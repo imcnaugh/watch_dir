@@ -1,6 +1,6 @@
 use std::path::Path;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum ReadStrategy {
     Tail,      // emit whatever new bytes arrive
     TailLines, // buffer until newline, emit complete lines only

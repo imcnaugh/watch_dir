@@ -14,16 +14,23 @@ pub struct Watcher {
     handle: std::thread::JoinHandle<()>,
 }
 
+pub trait SelectStrategy: Send + 'static {
+    fn select(&self, path: &Path) -> ReadStrategy;
+}
+
+impl<F: Fn(&Path) -> ReadStrategy + Send + 'static> SelectStrategy for F {
+    fn select(&self, path: &Path) -> ReadStrategy {
+        self(path)
+    }
+}
+
 pub struct Options {
     recursive: bool,
+    read_strategy_selector: Box<dyn SelectStrategy>,
 }
 
 impl Watcher {
-    pub fn new(
-        path: &Path,
-        read_strategy_selector: impl Fn(&Path) -> ReadStrategy + Send + 'static,
-        options: Options,
-    ) -> Result<Self, WatchDirError> {
+    pub fn new(path: &Path, options: Options) -> Result<Self, WatchDirError> {
         let (notify_tx, notify_rx) = mpsc::channel::<DebounceEventResult>();
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
         let (control_tx, control_rx) = mpsc::channel::<Actions>();
@@ -33,13 +40,13 @@ impl Watcher {
 
         let handle = std::thread::Builder::new()
             .name("watch_dir-rs Watcher".to_string())
-            .spawn(move || run(notify_rx, tx, control_rx, read_strategy_selector));
+            .spawn(move || run(notify_rx, tx, control_rx, options.read_strategy_selector))?;
 
         Ok(Self {
             notify_watcher: debouncer,
             rx: Some(rx),
             control_tx,
-            handle: handle.unwrap(),
+            handle,
         })
     }
 
@@ -60,7 +67,7 @@ fn run(
     notify_rx: Receiver<DebounceEventResult>,
     tx: Sender<(PathBuf, String)>,
     control_rx: Receiver<Actions>,
-    read_strategy_selector: impl Fn(&Path) -> ReadStrategy + Send + 'static,
+    read_strategy_selector: Box<dyn SelectStrategy>,
 ) {
     let mut paused = false;
     loop {
@@ -83,7 +90,7 @@ fn run(
                         .iter()
                         .filter(|e| e.kind.is_modify())
                         .flat_map(|e| &e.paths)
-                        .for_each(|path| match read_strategy_selector(path) {
+                        .for_each(|path| match read_strategy_selector.select(path) {
                             ReadStrategy::Tail => {}
                             ReadStrategy::TailLines => {}
                             ReadStrategy::Replace => {}
@@ -99,7 +106,7 @@ fn run(
 
 impl Options {
     pub fn new() -> Self {
-        Self { recursive: false }
+        Self::default()
     }
 
     pub fn with_recursive(mut self, recursive: bool) -> Self {
@@ -111,6 +118,23 @@ impl Options {
         match self.recursive {
             true => RecursiveMode::Recursive,
             false => RecursiveMode::NonRecursive,
+        }
+    }
+
+    pub fn with_read_strategy_selector(
+        mut self,
+        read_strategy_selector: impl SelectStrategy,
+    ) -> Self {
+        self.read_strategy_selector = Box::new(read_strategy_selector);
+        self
+    }
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            recursive: false,
+            read_strategy_selector: Box::new(crate::TAIL_STRATEGY),
         }
     }
 }
