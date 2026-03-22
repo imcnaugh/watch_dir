@@ -61,6 +61,12 @@ impl Watcher {
     pub fn pause(&self) {
         let _ = self.control_tx.send(Actions::Pause);
     }
+
+    pub fn stop(self) {
+        let _ = self.control_tx.send(Actions::Stop);
+        self.notify_watcher.stop();
+        let _ = self.handle.join();
+    }
 }
 
 fn run(
@@ -75,6 +81,7 @@ fn run(
             match action {
                 Actions::Pause => paused = true,
                 Actions::Run => paused = false,
+                Actions::Stop => return,
             }
         }
 
@@ -142,4 +149,5 @@ impl Default for Options {
 enum Actions {
     Run,
     Pause,
+    Stop,
 }
