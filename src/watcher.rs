@@ -9,7 +9,6 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
 
 pub struct Watcher {
     notify_watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
@@ -24,7 +23,7 @@ impl Watcher {
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
         let (control_tx, control_rx) = mpsc::channel::<Actions>();
 
-        let mut debouncer = new_debouncer(Duration::from_secs(1), None, notify_tx)?;
+        let mut debouncer = new_debouncer(options.notify_debounce_duration, None, notify_tx)?;
         debouncer.watch(path, options.recursive_mode())?;
 
         let mut offsets = HashMap::new();

@@ -56,7 +56,7 @@ impl Worker {
                     if let Ok(event) = event {
                         event
                             .iter()
-                            .filter(|e| e.kind.is_modify())
+                            .filter(|e| e.kind.is_modify() || e.kind.is_create())
                             .flat_map(|e| &e.paths)
                             .for_each(|path| {
                                 let _ = match self.read_strategy_selector.select(path) {

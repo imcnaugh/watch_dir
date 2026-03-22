@@ -1,9 +1,11 @@
 use crate::SelectStrategy;
 use notify::RecursiveMode;
+use std::time::Duration;
 
 pub struct Options {
     pub(crate) recursive: bool,
     pub(crate) read_strategy_selector: Box<dyn SelectStrategy>,
+    pub(crate) notify_debounce_duration: Duration,
 }
 
 impl Options {
@@ -30,6 +32,11 @@ impl Options {
         self.read_strategy_selector = Box::new(read_strategy_selector);
         self
     }
+
+    pub fn with_notify_debounce_duration(mut self, duration: Duration) -> Self {
+        self.notify_debounce_duration = duration;
+        self
+    }
 }
 
 impl Default for Options {
@@ -37,6 +44,7 @@ impl Default for Options {
         Self {
             recursive: false,
             read_strategy_selector: Box::new(crate::TAIL_STRATEGY),
+            notify_debounce_duration: Duration::from_millis(500),
         }
     }
 }
