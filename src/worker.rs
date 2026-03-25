@@ -1,6 +1,4 @@
 use crate::{Actions, ReadStrategy, SelectStrategy};
-use notify::EventKind;
-use notify::event::{CreateKind, DataChange, ModifyKind};
 use notify_debouncer_full::DebounceEventResult;
 use std::collections::HashMap;
 use std::fs::File;
@@ -58,12 +56,7 @@ impl Worker {
                     if let Ok(event) = event {
                         event
                             .iter()
-                            .filter(|&e| {
-                                matches!(
-                                    e.event.kind,
-                                    EventKind::Create(CreateKind::File) | EventKind::Modify(_)
-                                )
-                            })
+                            .filter(|&e| e.kind.is_create() || e.kind.is_modify())
                             .flat_map(|e| &e.paths)
                             .for_each(|path| {
                                 let _ = match self.read_strategy_selector.select(path) {

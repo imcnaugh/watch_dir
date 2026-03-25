@@ -17,10 +17,11 @@ fn tail_strategy_simple_test() {
         .with_read_strategy_selector(TAIL_STRATEGY)
         .with_notify_debounce_duration(Duration::from_millis(50));
     let mut watcher = watch_dir::Watcher::new(dir.path(), options).unwrap();
+    let rx = watcher.take_receiver().unwrap();
+
     let create_test_file_handle = File::create(&test_file_path).unwrap();
     drop(create_test_file_handle);
 
-    let rx = watcher.take_receiver().unwrap();
     assert!(matches!(
         rx.recv_timeout(Duration::from_millis(100)),
         Err(RecvTimeoutError::Timeout)
