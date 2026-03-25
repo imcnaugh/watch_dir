@@ -1,6 +1,6 @@
 use crate::{Actions, ReadStrategy, SelectStrategy};
 use notify::EventKind;
-use notify::event::CreateKind;
+use notify::event::{CreateKind, DataChange, ModifyKind};
 use notify_debouncer_full::DebounceEventResult;
 use std::collections::HashMap;
 use std::fs::File;
@@ -104,7 +104,9 @@ impl Worker {
 
     fn tail_strategy(&mut self, path: &Path) -> Result<(), std::io::Error> {
         let tail = self.read_tail(path)?;
-        let _ = self.tx.send((path.to_path_buf(), tail));
+        if !tail.is_empty() {
+            let _ = self.tx.send((path.to_path_buf(), tail));
+        }
         Ok(())
     }
 
