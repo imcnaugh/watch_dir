@@ -56,3 +56,62 @@ fn tail_strategy_simple_test() {
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
 }
+
+#[test]
+fn no_message_sent_for_empty_file() {
+    let dir = common::TestDir::new("no_message_sent_for_empty_file");
+    let test_file_path = Path::new(dir.path()).join("test_file.txt");
+
+    let create_test_file_handle = File::create(&test_file_path).unwrap();
+    drop(create_test_file_handle);
+
+    let options = watch_dir::Options::new()
+        .with_read_strategy_selector(TAIL_STRATEGY)
+        .with_notify_debounce_duration(Duration::from_millis(50));
+    let mut watcher = watch_dir::Watcher::new(dir.path(), options).unwrap();
+    let rx = watcher.take_receiver().unwrap();
+
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+
+    let mut test_file_handle = File::options().append(true).open(&test_file_path).unwrap();
+    write!(test_file_handle, "").unwrap();
+    drop(test_file_handle);
+
+    let msg = rx.recv_timeout(Duration::from_millis(100));
+    assert!(matches!(msg, Err(RecvTimeoutError::Timeout)));
+}
+
+#[test]
+fn offset_is_reset_when_file_is_smaller_then_current_offset() {
+    let dir = common::TestDir::new("offset_is_reset_when_file_is_smaller_then_current_offset");
+    let test_file_path = Path::new(dir.path()).join("test_file.txt");
+
+    let create_test_file_handle = File::create(&test_file_path).unwrap();
+    drop(create_test_file_handle);
+
+    let mut test_file_handle = File::options().append(true).open(&test_file_path).unwrap();
+    write!(test_file_handle, "quite a lot of text\nit just keeps going").unwrap();
+    drop(test_file_handle);
+
+    let options = watch_dir::Options::new()
+        .with_read_strategy_selector(TAIL_STRATEGY)
+        .with_notify_debounce_duration(Duration::from_millis(50));
+    let mut watcher = watch_dir::Watcher::new(dir.path(), options).unwrap();
+    let rx = watcher.take_receiver().unwrap();
+
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+
+    let mut test_file_handle = File::options()
+        .write(true)
+        .truncate(true)
+        .open(&test_file_path)
+        .unwrap();
+    write!(test_file_handle, "replacement text").unwrap();
+    drop(test_file_handle);
+
+    let msg = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    assert!(msg.1.contains("replacement text"));
+    assert_eq!(msg.0, test_file_path.to_path_buf().canonicalize().unwrap());
+
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+}
