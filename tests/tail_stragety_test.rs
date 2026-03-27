@@ -55,6 +55,9 @@ fn tail_strategy_simple_test() {
     );
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+
+    watcher.stop();
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected));
 }
 
 #[test]
@@ -79,6 +82,9 @@ fn no_message_sent_for_empty_file() {
 
     let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT);
     assert!(matches!(msg, Err(RecvTimeoutError::Timeout)));
+
+    watcher.stop();
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected));
 }
 
 #[test]
@@ -114,4 +120,7 @@ fn offset_is_reset_when_file_is_smaller_then_current_offset() {
     assert_eq!(msg.0, test_file_path.to_path_buf().canonicalize().unwrap());
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+
+    watcher.stop();
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected));
 }

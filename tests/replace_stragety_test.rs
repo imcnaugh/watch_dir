@@ -34,7 +34,10 @@ fn replace_strategy_simple_test() {
         msg.0.canonicalize().unwrap()
     );
 
-    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty))
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+
+    watcher.stop();
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected));
 }
 
 #[test]
@@ -77,4 +80,7 @@ fn replace_strategy_multiple_replace_test() {
     );
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+
+    watcher.stop();
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected));
 }

@@ -44,7 +44,7 @@ impl Default for Options {
         Self {
             recursive: false,
             read_strategy_selector: Box::new(crate::TAIL_STRATEGY),
-            notify_debounce_duration: Duration::from_millis(500),
+            notify_debounce_duration: Duration::from_millis(250),
         }
     }
 }
