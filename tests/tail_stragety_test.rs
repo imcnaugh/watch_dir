@@ -1,11 +1,11 @@
 mod common;
 
+use crate::common::{DEFAULT_CHANNEL_RECV_TIMEOUT, DEFAULT_WATCHER_DEBOUNCE_DURATION};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::TryRecvError;
-use std::time::Duration;
 use watch_dir::TAIL_STRATEGY;
 
 #[test]
@@ -15,7 +15,7 @@ fn tail_strategy_simple_test() {
 
     let options = watch_dir::Options::new()
         .with_read_strategy_selector(TAIL_STRATEGY)
-        .with_notify_debounce_duration(Duration::from_millis(50));
+        .with_notify_debounce_duration(DEFAULT_WATCHER_DEBOUNCE_DURATION);
     let mut watcher = watch_dir::Watcher::new(dir.path(), options).unwrap();
     let rx = watcher.take_receiver().unwrap();
 
@@ -23,7 +23,7 @@ fn tail_strategy_simple_test() {
     drop(create_test_file_handle);
 
     assert!(matches!(
-        rx.recv_timeout(Duration::from_millis(100)),
+        rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT),
         Err(RecvTimeoutError::Timeout)
     ));
 
@@ -31,7 +31,7 @@ fn tail_strategy_simple_test() {
     write!(test_file_handle, "test").unwrap();
     drop(test_file_handle);
 
-    let msg = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT).unwrap();
     assert_eq!(msg.1, "test");
     assert_eq!(
         test_file_path.canonicalize().unwrap(),
@@ -39,7 +39,7 @@ fn tail_strategy_simple_test() {
     );
 
     assert!(matches!(
-        rx.recv_timeout(Duration::from_millis(100)),
+        rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT),
         Err(RecvTimeoutError::Timeout)
     ));
 
@@ -47,7 +47,7 @@ fn tail_strategy_simple_test() {
     write!(test_file_handle, " more text!").unwrap();
     drop(test_file_handle);
 
-    let msg = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT).unwrap();
     assert_eq!(msg.1, " more text!");
     assert_eq!(
         test_file_path.canonicalize().unwrap(),
@@ -67,7 +67,7 @@ fn no_message_sent_for_empty_file() {
 
     let options = watch_dir::Options::new()
         .with_read_strategy_selector(TAIL_STRATEGY)
-        .with_notify_debounce_duration(Duration::from_millis(50));
+        .with_notify_debounce_duration(DEFAULT_WATCHER_DEBOUNCE_DURATION);
     let mut watcher = watch_dir::Watcher::new(dir.path(), options).unwrap();
     let rx = watcher.take_receiver().unwrap();
 
@@ -77,7 +77,7 @@ fn no_message_sent_for_empty_file() {
     write!(test_file_handle, "").unwrap();
     drop(test_file_handle);
 
-    let msg = rx.recv_timeout(Duration::from_millis(100));
+    let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT);
     assert!(matches!(msg, Err(RecvTimeoutError::Timeout)));
 }
 
@@ -95,7 +95,7 @@ fn offset_is_reset_when_file_is_smaller_then_current_offset() {
 
     let options = watch_dir::Options::new()
         .with_read_strategy_selector(TAIL_STRATEGY)
-        .with_notify_debounce_duration(Duration::from_millis(50));
+        .with_notify_debounce_duration(DEFAULT_WATCHER_DEBOUNCE_DURATION);
     let mut watcher = watch_dir::Watcher::new(dir.path(), options).unwrap();
     let rx = watcher.take_receiver().unwrap();
 
@@ -109,7 +109,7 @@ fn offset_is_reset_when_file_is_smaller_then_current_offset() {
     write!(test_file_handle, "replacement text").unwrap();
     drop(test_file_handle);
 
-    let msg = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT).unwrap();
     assert!(msg.1.contains("replacement text"));
     assert_eq!(msg.0, test_file_path.to_path_buf().canonicalize().unwrap());
 

@@ -1,10 +1,10 @@
 mod common;
 
+use crate::common::{DEFAULT_CHANNEL_RECV_TIMEOUT, DEFAULT_WATCHER_DEBOUNCE_DURATION};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::mpsc::TryRecvError;
-use std::time::Duration;
 use watch_dir;
 use watch_dir::REPLACE_STRATEGY;
 
@@ -15,7 +15,7 @@ fn replace_strategy_simple_test() {
 
     let options = watch_dir::Options::new()
         .with_read_strategy_selector(REPLACE_STRATEGY)
-        .with_notify_debounce_duration(Duration::from_millis(50));
+        .with_notify_debounce_duration(DEFAULT_WATCHER_DEBOUNCE_DURATION);
     let mut watcher = watch_dir::Watcher::new(Path::new(dir.path()), options).unwrap();
     let create_test_file_handle = File::create(&test_file_path).unwrap();
     drop(create_test_file_handle);
@@ -27,7 +27,7 @@ fn replace_strategy_simple_test() {
     write!(test_file_handle, "test").unwrap();
     drop(test_file_handle);
 
-    let msg = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT).unwrap();
     assert_eq!(msg.1, "test");
     assert_eq!(
         test_file_path.canonicalize().unwrap(),
@@ -44,7 +44,7 @@ fn replace_strategy_multiple_replace_test() {
 
     let options = watch_dir::Options::new()
         .with_read_strategy_selector(REPLACE_STRATEGY)
-        .with_notify_debounce_duration(Duration::from_millis(50));
+        .with_notify_debounce_duration(DEFAULT_WATCHER_DEBOUNCE_DURATION);
 
     let mut watcher = watch_dir::Watcher::new(Path::new(dir.path()), options).unwrap();
     let rx = watcher.take_receiver().unwrap();
@@ -57,7 +57,7 @@ fn replace_strategy_multiple_replace_test() {
     write!(test_file_handle, "test").unwrap();
     drop(test_file_handle);
 
-    let msg = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT).unwrap();
     assert_eq!(msg.1, "test");
     assert_eq!(
         test_file_path.canonicalize().unwrap(),
@@ -68,7 +68,7 @@ fn replace_strategy_multiple_replace_test() {
     write!(test_file_handle, "test2").unwrap();
     drop(test_file_handle);
 
-    let msg = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT).unwrap();
     println!("{:?}", msg);
     assert_eq!(msg.1, "test2");
     assert_eq!(
