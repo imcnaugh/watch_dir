@@ -18,14 +18,17 @@ watch_dir = { path = "../watch_dir" }
 ### Basic example
 
 ```rust
-use watch_dir::{Watcher, TAIL_LINES_STRATEGY};
+use watch_dir::{Watcher, Options, TAIL_LINES_STRATEGY};
 use std::path::PathBuf;
 
 fn main() {
     let path = PathBuf::from("/path/to/watch");
-    let mut watcher = Watcher::new(&path, TAIL_LINES_STRATEGY).unwrap();
+    let options = Options::new()
+        .with_read_strategy_selector(TAIL_LINES_STRATEGY);
+    let mut watcher = Watcher::new(&path, options).unwrap();
     let rx = watcher.take_receiver().unwrap();
 
+    watcher.run();
     for (path, content) in rx {
         println!("{:?}: {}", path, content);
     }
@@ -35,8 +38,9 @@ fn main() {
 ### Custom strategy per file type
 
 ```rust
-use watch_dir::{Watcher, ReadStrategy};
+use watch_dir::{Watcher, Options, ReadStrategy};
 use std::path::Path;
+use std::path::PathBuf;
 
 fn my_strategy(path: &Path) -> ReadStrategy {
     match path.extension().and_then(|e| e.to_str()) {
@@ -48,9 +52,13 @@ fn my_strategy(path: &Path) -> ReadStrategy {
 
 fn main() {
     let path = PathBuf::from("/path/to/watch");
-    let mut watcher = Watcher::new(&path, my_strategy).unwrap();
+    let options = Options::new()
+        .with_read_strategy_selector(my_strategy)
+        .with_recursive(true);
+    let mut watcher = Watcher::new(&path, options).unwrap();
     let rx = watcher.take_receiver().unwrap();
 
+    watcher.run();
     for (path, content) in rx {
         println!("{:?}: {}", path, content);
     }
@@ -70,13 +78,27 @@ Convenience constants `TAIL_STRATEGY`, `TAIL_LINES_STRATEGY`, and `REPLACE_STRAT
 
 ## API
 
-### `Watcher::new(path, strategy_fn) -> Result<Watcher, Error>`
+### `Options`
 
-Creates a watcher for the given directory. `strategy_fn` is called with the path of each changed file and returns the `ReadStrategy` to use. All modified files are observed; `strategy_fn` returning `ReadStrategy::Ignore` is how you opt individual files out.
+Builder for watcher configuration:
+
+| Method | Description | Default |
+|--------|-------------|---------|
+| `with_read_strategy_selector(fn)` | Strategy selector called per-file to choose how it is read | `TAIL_STRATEGY` |
+| `with_recursive(bool)` | Watch subdirectories recursively | `false` |
+| `with_notify_debounce_duration(Duration)` | Debounce window for file system events | 250ms |
+
+### `Watcher::new(path, options) -> Result<Watcher, Error>`
+
+Creates a watcher for the given directory using the provided `Options`. The strategy selector is called with the path of each changed file and returns the `ReadStrategy` to use. `ReadStrategy::Ignore` is how you opt individual files out.
 
 ### `Watcher::take_receiver() -> Option<Receiver<(PathBuf, String)>>`
 
 Returns the channel receiver. Each message is a `(path, content)` tuple where `content` depends on the read strategy applied to that file.
+
+### `Watcher::run()` / `Watcher::pause()` / `Watcher::stop()`
+
+Control the watcher's background worker, the worker is automatically started when the watcher is created.
 
 ## Dependencies
 
