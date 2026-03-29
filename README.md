@@ -12,7 +12,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-watch_dir = { path = "../watch_dir" }
+watch_dir = "0.1.0"
 ```
 
 ### Basic example
@@ -28,7 +28,6 @@ fn main() {
     let mut watcher = Watcher::new(&path, options).unwrap();
     let rx = watcher.take_receiver().unwrap();
 
-    watcher.run();
     for (path, content) in rx {
         println!("{:?}: {}", path, content);
     }
@@ -58,7 +57,6 @@ fn main() {
     let mut watcher = Watcher::new(&path, options).unwrap();
     let rx = watcher.take_receiver().unwrap();
 
-    watcher.run();
     for (path, content) in rx {
         println!("{:?}: {}", path, content);
     }
