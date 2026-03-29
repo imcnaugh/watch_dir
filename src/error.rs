@@ -1,14 +1,27 @@
 use std::fmt::{Display, Formatter};
 
+/// The category of a [`WatchDirError`].
 #[derive(Debug)]
 pub enum ErrorKind {
+    /// An error from the underlying `notify` filesystem watcher.
     Notify(notify::Error),
+    /// An I/O error encountered while reading a file or scanning a directory.
     Io(std::io::Error),
 }
 
+/// Error type returned by this crate.
+///
+/// Use [`WatchDirError::kind`] to inspect the underlying cause.
 #[derive(Debug)]
 pub struct WatchDirError {
     kind: ErrorKind,
+}
+
+impl WatchDirError {
+    /// Returns the underlying [`ErrorKind`].
+    pub fn kind(&self) -> &ErrorKind {
+        &self.kind
+    }
 }
 
 impl Display for WatchDirError {

@@ -10,6 +10,10 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
+/// Watches a directory for file changes and streams new content over a channel.
+///
+/// Create a `Watcher` with [`Watcher::new`], then call [`take_receiver`](Watcher::take_receiver)
+/// to obtain the [`Receiver`] and [`run`](Watcher::run) to start delivering events.
 pub struct Watcher {
     notify_watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
     rx: Option<Receiver<(PathBuf, String)>>,
@@ -18,6 +22,11 @@ pub struct Watcher {
 }
 
 impl Watcher {
+    /// Creates a new `Watcher` monitoring `path` with the given [`Options`].
+    ///
+    /// Spawns a background worker thread. The watcher starts in a running state.
+    ///
+    /// Returns a [`WatchDirError`] if the filesystem watcher or initial directory scan fails.
     pub fn new(path: &Path, options: Options) -> Result<Self, WatchDirError> {
         let (notify_tx, notify_rx) = mpsc::channel::<DebounceEventResult>();
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
@@ -54,18 +63,25 @@ impl Watcher {
         })
     }
 
+    /// Takes the [`Receiver`] for file change events.
+    ///
+    /// Each message is a `(PathBuf, String)` pair: the canonical path of the changed file and
+    /// the new content. Returns `None` if the receiver has already been taken.
     pub fn take_receiver(&mut self) -> Option<Receiver<(PathBuf, String)>> {
         self.rx.take()
     }
 
+    /// Resumes delivering file change events to the receiver.
     pub fn run(&self) {
         let _ = self.control_tx.send(Actions::Run);
     }
 
+    /// Pauses event delivery.
     pub fn pause(&self) {
         let _ = self.control_tx.send(Actions::Pause);
     }
 
+    /// Stops the watcher and shuts down the background worker thread.
     pub fn stop(self) {
         let _ = self.control_tx.send(Actions::Stop);
         self.notify_watcher.stop();
