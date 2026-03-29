@@ -1,5 +1,12 @@
 [package]
 name = "watch_dir"
+description = "Monitors a directory for file changes and delivers new UTF-8 content over a channel, with configurable read strategies."
+authors = ["Ian McNaughton <IanMcNaugh@gmail.com>"]
+keywords = ["file-watcher", "filesystem", "log-monitor", "notify"]
+categories = ["filesystem", "os"]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/imcnaugh/watch_dir"
 version = "0.1.0"
 edition = "2024"
 
