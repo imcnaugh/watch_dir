@@ -1,102 +1,89 @@
 # watch_dir
 
-A Rust library for monitoring a directory and reading file changes with configurable read strategies.
+A Rust library that watches a directory for file changes and streams new content over a channel.
 
-## Overview
-
-`watch_dir` watches a directory for file modifications and delivers new content over a channel. You control how each file is read by providing a strategy selector function — useful for log tailing, config file reloading, or any scenario where you need to react to file changes.
+Most file-watching crates stop at detecting that a file changed. `watch_dir` goes further: it reads the file, applies a configurable strategy (tail new bytes, emit complete lines, re-read the whole file, or ignore), and delivers `(path, content)` pairs to your code via a `std::sync::mpsc` channel. Debouncing, offset tracking, and background threading are handled for you.
 
 ## Usage
 
-Add to your `Cargo.toml`:
-
 ```toml
 [dependencies]
-watch_dir = "0.1.0"
+watch_dir = "1.0.0"
 ```
 
-### Basic example
+### Tail files in a directory
+
+Emit each new complete line as it is appended to any file modified in the directory:
 
 ```rust
 use watch_dir::{Watcher, Options, TAIL_LINES_STRATEGY};
 use std::path::PathBuf;
 
 fn main() {
-    let path = PathBuf::from("/path/to/watch");
-    let options = Options::new()
-        .with_read_strategy_selector(TAIL_LINES_STRATEGY);
-    let mut watcher = Watcher::new(&path, options).unwrap();
+    let watcher = Watcher::new(
+        &PathBuf::from("/var/log/myapp"),
+        Options::default(),
+    ).unwrap();
+
     let rx = watcher.take_receiver().unwrap();
 
-    for (path, content) in rx {
-        println!("{:?}: {}", path, content);
+    for (path, line) in rx {
+        println!("{}: {}", path.display(), line);
     }
 }
 ```
 
-### Custom strategy per file type
+### Different strategy per file type
+
+Use a selector function to choose how each file is read:
 
 ```rust
 use watch_dir::{Watcher, Options, ReadStrategy};
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-fn my_strategy(path: &Path) -> ReadStrategy {
+fn strategy(path: &Path) -> ReadStrategy {
     match path.extension().and_then(|e| e.to_str()) {
-        Some("log") => ReadStrategy::TailLines, // emit complete lines as they appear
-        Some("json") => ReadStrategy::Replace,  // re-read the whole file on each change
-        _ => ReadStrategy::Ignore,
+        Some("log")  => ReadStrategy::TailLines, // emit complete lines as they appear
+        Some("json") => ReadStrategy::Replace,   // re-read the whole file on each change
+        Some("txt")  => ReadStrategy::Tail,      // emit appended text as it appears
+        _            => ReadStrategy::Ignore,    // ignore anything that's not matched.
     }
 }
 
 fn main() {
-    let path = PathBuf::from("/path/to/watch");
-    let options = Options::new()
-        .with_read_strategy_selector(my_strategy)
-        .with_recursive(true);
-    let mut watcher = Watcher::new(&path, options).unwrap();
+    let watcher = Watcher::new(
+        &PathBuf::from("/path/to/watch"),
+        Options::new()
+            .with_read_strategy_selector(strategy) // set your custom strategy,
+            .with_recursive(true)                  // recursively watch subdirectories
+    ).unwrap();
+
     let rx = watcher.take_receiver().unwrap();
 
     for (path, content) in rx {
-        println!("{:?}: {}", path, content);
+        println!("{}: {}", path.display(), content);
     }
 }
 ```
 
 ## Read strategies
 
-| Strategy | Behaviour |
-|----------|-----------|
-| `ReadStrategy::Tail` | Emits new bytes since the last read |
-| `ReadStrategy::TailLines` | Buffers new bytes and emits complete lines (newline-delimited) |
-| `ReadStrategy::Replace` | Re-reads the entire file on every change |
-| `ReadStrategy::Ignore` | Skips the file entirely |
+| Strategy    | Behaviour                                                   |
+|-------------|-------------------------------------------------------------|
+| `Tail`      | Emit new text since the last read                           |
+| `TailLines` | Buffer new text; emit only complete newline-delimited lines |
+| `Replace`   | Re-read the entire file on every change                     |
+| `Ignore`    | Skip this file                                              |
 
-Convenience constants `TAIL_STRATEGY`, `TAIL_LINES_STRATEGY`, and `REPLACE_STRATEGY` are provided for cases where you want the same strategy for all files.
+Convenience constants `TAIL_STRATEGY`, `TAIL_LINES_STRATEGY`, and `REPLACE_STRATEGY` apply one strategy to all files. Pass a function `fn(&Path) -> ReadStrategy` to vary it per file.
 
-## API
+## Options
 
-### `Options`
-
-Builder for watcher configuration:
-
-| Method | Description | Default |
-|--------|-------------|---------|
-| `with_read_strategy_selector(fn)` | Strategy selector called per-file to choose how it is read | `TAIL_STRATEGY` |
-| `with_recursive(bool)` | Watch subdirectories recursively | `false` |
-| `with_notify_debounce_duration(Duration)` | Debounce window for file system events | 250ms |
-
-### `Watcher::new(path, options) -> Result<Watcher, Error>`
-
-Creates a watcher for the given directory using the provided `Options`. The strategy selector is called with the path of each changed file and returns the `ReadStrategy` to use. `ReadStrategy::Ignore` is how you opt individual files out.
-
-### `Watcher::take_receiver() -> Option<Receiver<(PathBuf, String)>>`
-
-Returns the channel receiver. Each message is a `(path, content)` tuple where `content` depends on the read strategy applied to that file.
-
-### `Watcher::run()` / `Watcher::pause()` / `Watcher::stop()`
-
-Control the watcher's background worker, the worker is automatically started when the watcher is created.
+| Method                                    | Default         |
+|-------------------------------------------|-----------------|
+| `with_read_strategy_selector(fn)`         | `TAIL_STRATEGY` |
+| `with_recursive(bool)`                    | `false`         |
+| `with_notify_debounce_duration(Duration)` | 250ms           |
 
 ## Dependencies
 
