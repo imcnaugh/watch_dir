@@ -13,7 +13,7 @@ use std::sync::mpsc::{Receiver, Sender};
 /// Watches a directory for file changes and streams new content over a channel.
 ///
 /// Create a `Watcher` with [`Watcher::new`], then call [`take_receiver`](Watcher::take_receiver)
-/// to obtain the [`Receiver`] and [`run`](Watcher::run) to start delivering events.
+/// to obtain the [`Receiver`], events will start streaming on after construction.
 pub struct Watcher {
     notify_watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
     rx: Option<Receiver<(PathBuf, String)>>,

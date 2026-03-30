@@ -7,7 +7,7 @@ categories = ["filesystem", "os"]
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/imcnaugh/watch_dir"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 
 [dependencies]
