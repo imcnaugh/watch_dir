@@ -19,7 +19,7 @@ cargo check          # fast type-check without building
 
 - **`Watcher`** (`src/watcher.rs`) — the public API. Takes a `Path` and an `Options` struct. Sets up `notify_debouncer_full`, populates initial file offsets, spawns a `Worker` thread, and exposes `run()`, `pause()`, `stop()`, and `take_receiver()`.
 
-- **`Options`** (`src/options.rs`) — builder for watcher config: `with_read_strategy_selector`, `with_recursive`, `with_notify_debounce_duration`. Defaults: `TAIL_STRATEGY`, non-recursive, 500ms debounce.
+- **`Options`** (`src/options.rs`) — builder for watcher config: `with_read_strategy_selector`, `with_recursive`, `with_notify_debounce_duration`. Defaults: `TAIL_STRATEGY`, non-recursive, 250ms debounce.
 
 - **`Worker`** (`src/worker.rs`) — the background thread struct. Loops on debounced notify events and a control channel (`Actions::Run/Pause/Stop`). Applies the `ReadStrategy` per file, tracks tail offsets and per-file line buffers for `TailLines`. All file reading logic lives here.
 
