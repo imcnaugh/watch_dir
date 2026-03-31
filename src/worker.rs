@@ -1,5 +1,7 @@
 use crate::{Actions, ReadStrategy, SelectStrategy};
+#[cfg(not(windows))]
 use notify::EventKind;
+#[cfg(not(windows))]
 use notify::event::{CreateKind, ModifyKind};
 use notify_debouncer_full::DebounceEventResult;
 use std::collections::HashMap;
