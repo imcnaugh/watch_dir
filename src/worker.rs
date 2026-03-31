@@ -54,18 +54,20 @@ impl Worker {
             match self.notify_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(event) => {
                     if let Ok(event) = event {
-                        event
+                        let paths: std::collections::HashSet<PathBuf> = event
                             .iter()
                             .filter(|&e| e.kind.is_create() || e.kind.is_modify())
-                            .flat_map(|e| &e.paths)
-                            .for_each(|path| {
-                                let _ = match self.read_strategy_selector.select(path) {
-                                    ReadStrategy::Tail => self.tail_strategy(path),
-                                    ReadStrategy::TailLines => self.tail_lines_strategy(path),
-                                    ReadStrategy::Replace => self.replace_strategy(path),
-                                    ReadStrategy::Ignore => Ok(()),
-                                };
-                            })
+                            .flat_map(|e| e.paths.iter().cloned())
+                            .collect();
+
+                        paths.iter().for_each(|path| {
+                            let _ = match self.read_strategy_selector.select(path) {
+                                ReadStrategy::Tail => self.tail_strategy(path),
+                                ReadStrategy::TailLines => self.tail_lines_strategy(path),
+                                ReadStrategy::Replace => self.replace_strategy(path),
+                                ReadStrategy::Ignore => Ok(()),
+                            };
+                        })
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
