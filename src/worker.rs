@@ -1,8 +1,4 @@
 use crate::{Actions, ReadStrategy, SelectStrategy};
-#[cfg(not(windows))]
-use notify::EventKind;
-#[cfg(not(windows))]
-use notify::event::{CreateKind, ModifyKind};
 use notify_debouncer_full::DebounceEventResult;
 use std::collections::HashMap;
 use std::fs::File;
@@ -58,31 +54,20 @@ impl Worker {
             match self.notify_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(event) => {
                     if let Ok(event) = event {
-                        event
+                        let paths: std::collections::HashSet<PathBuf> = event
                             .iter()
-                            .filter(|&e| {
-                                #[cfg(windows)]
-                                {
-                                    e.kind.is_create() || e.kind.is_modify()
-                                }
-                                #[cfg(not(windows))]
-                                {
-                                    matches!(
-                                        e.kind,
-                                        EventKind::Create(CreateKind::File)
-                                            | EventKind::Modify(ModifyKind::Data(_))
-                                    )
-                                }
-                            })
-                            .flat_map(|e| &e.paths)
-                            .for_each(|path| {
-                                let _ = match self.read_strategy_selector.select(path) {
-                                    ReadStrategy::Tail => self.tail_strategy(path),
-                                    ReadStrategy::TailLines => self.tail_lines_strategy(path),
-                                    ReadStrategy::Replace => self.replace_strategy(path),
-                                    ReadStrategy::Ignore => Ok(()),
-                                };
-                            })
+                            .filter(|&e| e.kind.is_create() || e.kind.is_modify())
+                            .flat_map(|e| e.paths.iter().cloned())
+                            .collect();
+
+                        paths.iter().for_each(|path| {
+                            let _ = match self.read_strategy_selector.select(path) {
+                                ReadStrategy::Tail => self.tail_strategy(path),
+                                ReadStrategy::TailLines => self.tail_lines_strategy(path),
+                                ReadStrategy::Replace => self.replace_strategy(path),
+                                ReadStrategy::Ignore => Ok(()),
+                            };
+                        })
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,

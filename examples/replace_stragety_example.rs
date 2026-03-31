@@ -9,9 +9,7 @@ fn main() {
     let tmp_dir = tempdir().unwrap();
     let tmp_path = tmp_dir.path().to_path_buf();
 
-    let options = watch_dir::Options::default()
-        .with_read_strategy_selector(REPLACE_STRATEGY)
-        .with_notify_debounce_duration(Duration::from_millis(100));
+    let options = watch_dir::Options::default().with_read_strategy_selector(REPLACE_STRATEGY);
 
     let mut watcher = watch_dir::Watcher::new(&tmp_dir.path(), options).unwrap();
     let tx = watcher.take_receiver().unwrap();
@@ -30,7 +28,7 @@ fn main() {
                     .unwrap();
                 write!(f, "{i}").unwrap();
                 drop(f);
-                thread::sleep(Duration::from_millis(500));
+                thread::sleep(Duration::from_secs(1));
             }
 
             n += 1;
