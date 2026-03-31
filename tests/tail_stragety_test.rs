@@ -117,7 +117,10 @@ fn offset_is_reset_when_file_is_smaller_then_current_offset() {
 
     let msg = rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT).unwrap();
     assert!(msg.1.contains("replacement text"));
-    assert_eq!(msg.0, test_file_path.to_path_buf().canonicalize().unwrap());
+    assert_eq!(
+        test_file_path.canonicalize().unwrap(),
+        msg.0.canonicalize().unwrap()
+    );
 
     assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
 
