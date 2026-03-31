@@ -59,11 +59,18 @@ impl Worker {
                         event
                             .iter()
                             .filter(|&e| {
-                                matches!(
-                                    e.kind,
-                                    EventKind::Create(CreateKind::File)
-                                        | EventKind::Modify(ModifyKind::Data(_))
-                                )
+                                #[cfg(windows)]
+                                {
+                                    e.kind.is_create() || e.kind.is_modify()
+                                }
+                                #[cfg(not(windows))]
+                                {
+                                    matches!(
+                                        e.kind,
+                                        EventKind::Create(CreateKind::File)
+                                            | EventKind::Modify(ModifyKind::Data(_))
+                                    )
+                                }
                             })
                             .flat_map(|e| &e.paths)
                             .for_each(|path| {
