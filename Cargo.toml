@@ -13,6 +13,9 @@ edition = "2024"
 [[example]]
 name = "replace_stragety_example"
 
+[[example]]
+name = "multi_stragety_example"
+
 [dependencies]
 notify-debouncer-full = "0.7.0"
 notify = "8.2.0"
