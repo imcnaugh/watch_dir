@@ -44,10 +44,8 @@ fn main() {
                 write!(txt_file_handle, "{i}").unwrap();
                 drop(txt_file_handle);
 
-                let mut json_file_handle = File::options()
-                    .write(true)
-                    .open(&json_file_path)
-                    .unwrap();
+                let mut json_file_handle =
+                    File::options().write(true).open(&json_file_path).unwrap();
                 write!(json_file_handle, "{{ \"id\": {i} }}").unwrap();
                 drop(json_file_handle);
 
