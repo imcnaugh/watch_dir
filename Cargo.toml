@@ -11,10 +11,10 @@ version = "1.0.1"
 edition = "2024"
 
 [[example]]
-name = "replace_stragety_example"
+name = "replace_strategy_example"
 
 [[example]]
-name = "multi_stragety_example"
+name = "multi_strategy_example"
 
 [dependencies]
 notify-debouncer-mini = "0.6.0"
