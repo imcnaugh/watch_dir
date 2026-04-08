@@ -1,5 +1,5 @@
 use crate::{Actions, ReadStrategy, SelectStrategy};
-use notify_debouncer_full::DebounceEventResult;
+use notify_debouncer_mini::DebounceEventResult;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -54,11 +54,8 @@ impl Worker {
             match self.notify_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(event) => {
                     if let Ok(event) = event {
-                        let paths: std::collections::HashSet<PathBuf> = event
-                            .iter()
-                            .filter(|&e| e.kind.is_create() || e.kind.is_modify())
-                            .flat_map(|e| e.paths.iter().cloned())
-                            .collect();
+                        let paths: std::collections::HashSet<PathBuf> =
+                            event.iter().map(|e| e.path.clone()).collect();
 
                         paths.iter().for_each(|path| {
                             let _ = match self.read_strategy_selector.select(path) {

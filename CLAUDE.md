@@ -17,7 +17,7 @@ cargo check          # fast type-check without building
 
 `watch_dir` is a Rust library that monitors a directory for file changes and streams modified file contents over an `mpsc` channel.
 
-- **`Watcher`** (`src/watcher.rs`) — the public API. Takes a `Path` and an `Options` struct. Sets up `notify_debouncer_full`, populates initial file offsets, spawns a `Worker` thread, and exposes `run()`, `pause()`, `stop()`, and `take_receiver()`.
+- **`Watcher`** (`src/watcher.rs`) — the public API. Takes a `Path` and an `Options` struct. Sets up `notify_debouncer_mini`, populates initial file offsets, spawns a `Worker` thread, and exposes `run()`, `pause()`, `stop()`, and `take_receiver()`.
 
 - **`Options`** (`src/options.rs`) — builder for watcher config: `with_read_strategy_selector`, `with_recursive`, `with_notify_debounce_duration`. Defaults: `TAIL_STRATEGY`, non-recursive, 250ms debounce.
 

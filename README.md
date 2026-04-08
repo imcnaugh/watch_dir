@@ -88,3 +88,4 @@ Convenience constants `TAIL_STRATEGY`, `TAIL_LINES_STRATEGY`, and `REPLACE_STRAT
 ## Dependencies
 
 - [`notify`](https://crates.io/crates/notify) — cross-platform file system event detection
+- [`notify-debouncer-mini`](https://crates.io/crates/notify-debouncer-mini) — debouncing layer that collapses rapid events per path

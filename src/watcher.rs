@@ -3,7 +3,7 @@ use crate::options::Options;
 use crate::worker::Worker;
 use crate::{ReadStrategy, SelectStrategy};
 use notify::RecommendedWatcher;
-use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
+use notify_debouncer_mini::{DebounceEventResult, Debouncer, new_debouncer};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -15,7 +15,7 @@ use std::sync::mpsc::{Receiver, Sender};
 /// Create a `Watcher` with [`Watcher::new`], then call [`take_receiver`](Watcher::take_receiver)
 /// to obtain the [`Receiver`], events will start streaming on after construction.
 pub struct Watcher {
-    notify_watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
+    notify_watcher: Debouncer<RecommendedWatcher>,
     rx: Option<Receiver<(PathBuf, String)>>,
     control_tx: Sender<Actions>,
     handle: std::thread::JoinHandle<()>,
@@ -32,8 +32,8 @@ impl Watcher {
         let (tx, rx) = mpsc::channel::<(PathBuf, String)>();
         let (control_tx, control_rx) = mpsc::channel::<Actions>();
 
-        let mut debouncer = new_debouncer(options.notify_debounce_duration, None, notify_tx)?;
-        debouncer.watch(path, options.recursive_mode())?;
+        let mut debouncer = new_debouncer(options.notify_debounce_duration, notify_tx)?;
+        debouncer.watcher().watch(path, options.recursive_mode())?;
 
         let mut offsets = HashMap::new();
         populate_offsets(
@@ -84,7 +84,7 @@ impl Watcher {
     /// Stops the watcher and shuts down the background worker thread.
     pub fn stop(self) {
         let _ = self.control_tx.send(Actions::Stop);
-        self.notify_watcher.stop();
+        drop(self.notify_watcher);
         let _ = self.handle.join();
     }
 }
