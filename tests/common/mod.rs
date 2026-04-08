@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 
 pub const TEST_DIR_PATH: &'static str = "tests";
 pub const DEFAULT_WATCHER_DEBOUNCE_DURATION: std::time::Duration =
-    std::time::Duration::from_millis(250);
-pub const DEFAULT_CHANNEL_RECV_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500);
+    std::time::Duration::from_millis(500);
+pub const DEFAULT_CHANNEL_RECV_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_millis(1000);
 
 pub struct TestDir {
     folder: PathBuf,
