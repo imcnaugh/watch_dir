@@ -79,8 +79,14 @@ fn replace_strategy_multiple_replace_test() {
         msg.0.canonicalize().unwrap()
     );
 
-    assert_eq!(rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT), Err(RecvTimeoutError::Timeout));
+    assert_eq!(
+        rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT),
+        Err(RecvTimeoutError::Timeout)
+    );
 
     watcher.stop();
-    assert_eq!(rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT), Err(RecvTimeoutError::Disconnected));
+    assert_eq!(
+        rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT),
+        Err(RecvTimeoutError::Disconnected)
+    );
 }
