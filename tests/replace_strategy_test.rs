@@ -4,7 +4,7 @@ use crate::common::{DEFAULT_CHANNEL_RECV_TIMEOUT, DEFAULT_WATCHER_DEBOUNCE_DURAT
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
 use watch_dir;
 use watch_dir::REPLACE_STRATEGY;
 
@@ -79,8 +79,8 @@ fn replace_strategy_multiple_replace_test() {
         msg.0.canonicalize().unwrap()
     );
 
-    assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+    assert_eq!(rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT), Err(RecvTimeoutError::Timeout));
 
     watcher.stop();
-    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected));
+    assert_eq!(rx.recv_timeout(DEFAULT_CHANNEL_RECV_TIMEOUT), Err(RecvTimeoutError::Disconnected));
 }
